@@ -36,7 +36,7 @@ private:
     };
 
     EightEchoProcessor& proc;
-    juce::Image bg, logo, ledsOn, lensIce, lensRed, lensGreen, lensOrange;
+    juce::Image bg, x2On, ledsOn, lensIce, lensRed, lensGreen, lensOrange;
     std::array<juce::Image, 5> pointers;
     std::vector<Knob> knobs;
     std::unique_ptr<juce::ParameterAttachment> longAtt;

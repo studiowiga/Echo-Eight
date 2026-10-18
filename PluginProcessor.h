@@ -73,6 +73,7 @@ private:
     int currentProgram = 0;
     std::array<juce::ValueTree, kNumSlots> slots;
     int currentSlot = 0;
+    float loopLevel = 0.5f;
     void initSlots();
 
     // footswitch

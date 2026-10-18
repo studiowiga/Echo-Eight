@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(EightEcho VERSION 1.3.4)
+project(EightEcho VERSION 1.4.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,7 +38,7 @@ juce_add_plugin(EightEcho
     AU_MAIN_TYPE kAudioUnitType_MusicEffect)
 
 juce_add_binary_data(EightEchoData SOURCES
-    background.png leds_on.png logo.png
+    background.png leds_on.png x2_on.png
     pointer0.png pointer1.png pointer2.png pointer3.png pointer4.png
     lens_left_ice.png lens_right_red.png lens_right_green.png lens_right_orange.png)
 

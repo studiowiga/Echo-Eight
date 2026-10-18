@@ -16,7 +16,7 @@ PedalView::PedalView (EightEchoProcessor& p) : proc (p)
     // reperes des potards, lentilles allumees (diffusion de lumiere calculee sur l'image)
     bg      = ImageCache::getFromMemory (BinaryData::background_png, BinaryData::background_pngSize);
     ledsOn  = ImageCache::getFromMemory (BinaryData::leds_on_png, BinaryData::leds_on_pngSize);
-    logo    = ImageCache::getFromMemory (BinaryData::logo_png, BinaryData::logo_pngSize);
+    x2On    = ImageCache::getFromMemory (BinaryData::x2_on_png, BinaryData::x2_on_pngSize);
     lensIce = ImageCache::getFromMemory (BinaryData::lens_left_ice_png, BinaryData::lens_left_ice_pngSize);
     lensRed = ImageCache::getFromMemory (BinaryData::lens_right_red_png, BinaryData::lens_right_red_pngSize);
     lensGreen  = ImageCache::getFromMemory (BinaryData::lens_right_green_png, BinaryData::lens_right_green_pngSize);
@@ -151,7 +151,7 @@ void PedalView::mouseDown (const MouseEvent& e)
     if (int k = knobAt (p); k >= 0)
     {
         dragKnob = k; dragStartY = p.y; dragStartVal = knobs[(size_t) k].value;
-        dragStartIndex = roundToInt (knobs[(size_t) k].value * (wiga::kNumModes - 1));
+        dragStartIndex = roundToInt (knobs[(size_t) k].value);
         knobs[(size_t) k].att->beginGesture();
     }
 }
@@ -163,7 +163,7 @@ void PedalView::mouseDrag (const MouseEvent& e)
     const float dy = dragStartY - e.position.y;
     if (k.isMode)
     {
-        const int idx = jlimit (0, wiga::kNumModes - 1, dragStartIndex + (int) std::floor (dy / 20.0f + 0.5f));
+        const int idx = jlimit (0, wiga::kNumModes - 1, dragStartIndex + (int) std::floor (dy / 18.0f + 0.5f));
         k.att->setValueAsPartOfGesture ((float) idx);
     }
     else
@@ -205,7 +205,7 @@ void PedalView::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)
         auto& kn = knobs[(size_t) k];
         auto* par = proc.apvts.getParameter (kn.id);
         if (kn.isMode)
-            kn.att->setValueAsCompleteGesture ((float) jlimit (0, wiga::kNumModes - 1, roundToInt (kn.value * 10) + (w.deltaY > 0 ? 1 : -1)));
+            kn.att->setValueAsCompleteGesture ((float) jlimit (0, wiga::kNumModes - 1, roundToInt (kn.value) + (w.deltaY > 0 ? 1 : -1)));
         else
             kn.att->setValueAsCompleteGesture (par->convertFrom0to1 (jlimit (0.0f, 1.0f, par->getValue() + w.deltaY * 0.08f)));
     }
@@ -236,7 +236,7 @@ void PedalView::drawKnob (Graphics& g, const Knob& k)
     // le potard (moletage, reflet conique, ombre) est celui du visuel, fixe : l'eclairage ne tourne pas.
     // Seul le repere blanc, decoupe sur l'image, tourne autour de l'axe du chapeau.
     float angle;
-    if (k.isMode) angle = modeAngle (roundToInt (k.value * (wiga::kNumModes - 1)));
+    if (k.isMode) angle = modeAngle (jlimit (0, wiga::kNumModes - 1, roundToInt (k.value)));   // crante sur chaque mode
     else angle = degreesToRadians (-135.0f + 270.0f * k.value);
     const size_t idx = (size_t) (&k - knobs.data());
     const auto& img = pointers[jmin (idx, pointers.size() - 1)];
@@ -301,6 +301,7 @@ String PedalView::statusLine() const
     if (proc.twistAmount.load() > 0.05f) t << " TWIST";
     if (proc.glitching.load()) t << " GLT";
     if (proc.warpAmount.load() > 0.05f) t << " WARP";
+    if (proc.looperState.load() == 2 || proc.looperState.load() == 3) t << " +LOOP";   // boucle qui tourne sous l'effet
     return t;
 }
 
@@ -310,11 +311,11 @@ void PedalView::paint (Graphics& g)
 
     // ligne d'etat sous "DC 9V"
     g.setColour (kSilk.withAlpha (0.88f));
-    g.setFont (FontOptions (Font::getDefaultMonospacedFontName(), 14.0f, Font::bold));
-    g.drawText (statusLine(), Rectangle<float> (70, 76, 438, 18), Justification::centred);
+    g.setFont (FontOptions (Font::getDefaultMonospacedFontName(), 17.5f, Font::bold));
+    g.drawFittedText (statusLine(), Rectangle<int> (64, 52, 450, 26), Justification::centred, 1, 0.85f);
 
     // etiquettes du selecteur de mode (comme la serigraphie DD-8)
-    const int modeIdx = roundToInt (knobs[4].value * (wiga::kNumModes - 1));
+    const int modeIdx = jlimit (0, wiga::kNumModes - 1, roundToInt (knobs[4].value));
     g.setFont (FontOptions (11.5f, Font::bold));
     for (int i = 0; i < wiga::kNumModes; ++i)
     {
@@ -363,13 +364,8 @@ void PedalView::paint (Graphics& g)
         drawLens (g, false, img, 1.0f);
     }
 
-    // X2 (temps double) : halo quand actif
-    if (longOn)
-    {
-        for (int k = 4; k >= 1; --k) { g.setColour (kIce.withAlpha (0.07f)); g.fillEllipse (cX2.x - 26 - 4 * k, cX2.y - 22 - 3 * k, (26 + 4 * k) * 2, (22 + 3 * k) * 2); }
-        g.setColour (kIce); g.setFont (FontOptions (40.0f, Font::bold));
-        g.drawText ("X2", Rectangle<float> (cX2.x - 30, cX2.y - 22, 60, 44), Justification::centred);
-    }
+    // X2 (temps double) : la serigraphie X2 s'illumine (meme forme, meme taille)
+    if (longOn) g.drawImageAt (x2On, 220, 727);
 
     // footswitches enfonces
     auto pressFs = [&g] (Point<float> c)
@@ -381,11 +377,8 @@ void PedalView::paint (Graphics& g)
     if (pressed == BYPASSFS) pressFs (cBypass);
 
     // Studio Wiga entre les deux footswitchs, en bas
-    // logo Studio Wiga entre les deux footswitchs, en bas
-    {
-        const float w = 150.0f, h = w * (float) logo.getHeight() / (float) logo.getWidth();
-        g.drawImage (logo, Rectangle<float> (290.0f - w * 0.5f, 862.0f - h * 0.5f, w, h), RectanglePlacement::centred);
-    }
+    // logo Studio Wiga : integre a la plaque dans background.png (toujours fixe)
+
 }
 
 // =============================================================================

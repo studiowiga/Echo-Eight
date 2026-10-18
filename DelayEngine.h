@@ -221,6 +221,19 @@ struct Looper
         }
     }
     void stop() { if (state == RECORDING) { len = std::max (pos, 1); } if (len > 0) { state = STOPPED; pos = 0; } else state = EMPTY; }
+    // lecture seule (un autre mode d'effet est selectionne) : la boucle continue de tourner
+    // sans etre touchee par l'effet ni par ce que l'on joue par-dessus
+    void playOnly (float& outL, float& outR)
+    {
+        outL = outR = 0;
+        if (state == RECORDING) { len = std::max (pos, 1); pos = 0; state = PLAYING; }
+        if (state == OVERDUB) state = PLAYING;
+        if (state != PLAYING || len <= 0) return;
+        outL = L[(size_t) pos]; outR = R[(size_t) pos];
+        if (++pos >= len) pos = 0;
+    }
+    bool isRunning() const { return state == PLAYING || state == OVERDUB || state == RECORDING; }
+
     void process (float inL, float inR, float& outL, float& outR)
     {
         outL = outR = 0;
@@ -256,6 +269,7 @@ struct EngineParams
     bool  longMode = false;
     bool  dryKill = false;
     float mix = 0.5f;            // MIX : a midi = son direct + effet pleins (comme la DD-8)
+    float loopLevel = 0.5f;      // volume de la boucle memorise (E.LEVEL regle en mode LOOP)
     int   stereo = STEREO_INDEPENDENT;
     bool  effectOn = true;
     bool  carryover = true;
@@ -426,8 +440,11 @@ public:
             if (p.mode == REVERSE && p.level > 0.985f) dryGain = 0.0f;
             dryGainSm += (dryGain - dryGainSm) * gateCoef;
 
-            outL[i] = dryL * dryGainSm + wetL;
-            outR[i] = dryR * dryGainSm + wetR;
+            // boucle du looper ajoutee APRES l'effet : elle ne passe jamais dans le delay
+            float lpL, lpR; looper.playOnly (lpL, lpR);
+            const float llv = levelGain (p.loopLevel);
+            outL[i] = dryL * dryGainSm + wetL + lpL * llv;
+            outR[i] = dryR * dryGainSm + wetR + lpR * llv;
         }
     }
 

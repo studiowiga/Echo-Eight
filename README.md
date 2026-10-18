@@ -93,3 +93,10 @@ Looper : Looper
 
 ## Version 1.3.4
 - Lumiere autour des LED bleue et CHECK : halo rond qui s eteint en douceur (plus de bord carre).
+
+## Version 1.4.0
+- Logo Studio Wiga integre a la plaque (fixe, ne clignote plus quand on appuie sur un footswitch), detoure en gris-noir pour mieux ressortir.
+- Potard MODE : cranté exactement sur chacun des 11 modes inscrits (le repere pointait a cote auparavant).
+- X2 : c'est la serigraphie X2 elle-meme qui s'illumine (meme forme, meme taille).
+- Looper : une boucle enregistree continue de tourner quand on choisit un autre mode ; on joue par-dessus avec cet effet, la boucle reste seche (elle ne passe jamais dans le delay). Son volume est celui regle avec E.LEVEL en mode LOOP. Pour l'arreter : revenir sur LOOP (double appui / maintien 2 s pour effacer). La ligne d'etat affiche « +LOOP » quand une boucle tourne sous l'effet.
+- Ligne d'etat agrandie ; DC 9V remonte pour lui laisser la place.

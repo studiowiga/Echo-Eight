@@ -293,6 +293,8 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     EngineParams ep;
     ep.mode = mode; ep.level = level; ep.feedback = fb; ep.timeKnob = time; ep.delayMs = ms;
     ep.longMode = longMode; ep.dryKill = p ("drykill")->load() > 0.5f; ep.mix = p ("mix")->load();
+    if (mode == LOOP) loopLevel = level;            // E.LEVEL en LOOP = volume de boucle, memorise
+    ep.loopLevel = loopLevel;
     ep.stereo = (int) p ("stereo")->load();
     ep.effectOn = p ("on")->load() > 0.5f; ep.carryover = p ("carryover")->load() > 0.5f;
     ep.holdFx = fsHoldFx; ep.twist = twistP && mode != LOOP;
