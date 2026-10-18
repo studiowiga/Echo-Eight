@@ -387,11 +387,14 @@ EightEchoEditor::EightEchoEditor (EightEchoProcessor& p) : AudioProcessorEditor 
     addAndMakeVisible (pedal);
     pedal.onBackgroundRightClick = [this] (const MouseEvent&) { showMenu(); };
 
+    // l'ordre compte : setResizable() d'abord (il cree le coin de redimensionnement),
+    // puis notre contrainte stricte, pour que le coin ET l'hote l'utilisent
+    setResizable (true, true);
     constrainer.setMinimumSize (baseW, baseH);
     constrainer.setMaximumSize (baseW * 2, baseH * 2);
     constrainer.setFixedAspectRatio ((double) baseW / (double) baseH);
+    constrainer.setMinimumOnscreenAmounts (0x10000, 0x10000, 0x10000, 0x10000);
     setConstrainer (&constrainer);
-    setResizable (true, true);
     const float sc = jlimit (1.0f, 2.0f, proc.uiScale.load());
     setSize (roundToInt (baseW * sc), roundToInt (baseH * sc));
 }
@@ -404,7 +407,14 @@ void EightEchoEditor::setScale (float s)
 
 void EightEchoEditor::resized()
 {
-    const float s = currentScale();
+    // filet de securite : si un hote impose malgre tout une taille plus petite, on revient a la taille par defaut
+    if (getWidth() < baseW || getHeight() < baseH)
+    {
+        juce::Component::SafePointer<EightEchoEditor> self (this);
+        juce::MessageManager::callAsync ([self] { if (self != nullptr) self->setSize (baseW, baseH); });
+        return;
+    }
+    const float s = jmin ((float) getWidth() / (float) baseW, (float) getHeight() / (float) baseH);
     proc.uiScale = s;
     const float ps = ((float) baseH - 16.0f) / PedalView::imgH;           // la pedale occupe toute la hauteur
     const float ox = ((float) baseW - PedalView::imgW * ps) * 0.5f, oy = 8.0f;

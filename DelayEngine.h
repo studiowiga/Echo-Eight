@@ -436,11 +436,11 @@ public:
                 const float e = std::max (std::abs (wetL), std::abs (wetR)) * g;
                 const bool holding = warpAmt > 0.02f || glitchActive || twistFb > 0.05f;
                 if (! holding) { holdRef += (e - holdRef) * (e > holdRef ? 0.002f : 0.00002f); }
-                env += (e - env) * (e > env ? 0.01f : 0.0002f);
+                holdEnv += (e - holdEnv) * (e > holdEnv ? 0.01f : 0.0002f);
                 if (holding)
                 {
                     const float ceilv = std::max (0.25f, holdRef * 1.26f);
-                    const float want = env > ceilv ? ceilv / env : 1.0f;
+                    const float want = holdEnv > ceilv ? ceilv / holdEnv : 1.0f;
                     holdGain += (want - holdGain) * (want < holdGain ? 0.02f : 0.0005f);
                 }
                 else holdGain += (1.0f - holdGain) * 0.0005f;
@@ -503,7 +503,7 @@ private:
     // twist / warp
     bool twistHeld = false; float twistT = 0, twistMul = 1.0f, twistFb = 0, twistRot = 0, twistRamp = 0, rotPhase = 0;
     float warpAmt = 0, warpAtk = 0, warpRel = 0;
-    float holdRef = 0.1f, env = 0, holdGain = 1.0f;
+    float holdRef = 0.1f, holdEnv = 0, holdGain = 1.0f;
 
     // reverse
     float revPhase = 0, revLen = 0;

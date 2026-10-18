@@ -104,3 +104,6 @@ Looper : Looper
 ## Version 1.4.1
 - Preset « Runaway Tape (Twist) » supprime (26 presets d'usine).
 - Presets « (hold) » et effets maintenus (WARP, GLT, TWIST) : niveau securise. Limiteur automatique : pendant le maintien, l'effet ne depasse jamais environ +2 dB du niveau d'avant l'appui. WARP monte en nappe sans emballement, GLT au niveau du delay. Presets hold avec E.LEVEL reduit.
+
+## Version 1.4.2
+- Redimensionnement : impossible de reduire la fenetre sous sa taille par defaut (380 x 493), que ce soit par le coin, par un bord, par l hote ou a la reouverture du projet. Le rapport largeur/hauteur reste fixe ; agrandissement jusqu a 200 %.

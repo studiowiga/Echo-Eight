@@ -71,6 +71,29 @@ private:
     juce::Colour checkColour() const;
 };
 
+// Contrainte de taille stricte : jamais plus petit que la taille par defaut, quel que soit
+// le chemin du redimensionnement (coin de la fenetre, bord, hote VST3/AU, restauration du projet).
+// JUCE applique le rapport largeur/hauteur APRES les limites, ce qui peut faire passer sous le minimum :
+// on recadre donc une seconde fois, en gardant le rapport.
+class StrictMinConstrainer : public juce::ComponentBoundsConstrainer
+{
+public:
+    void checkBounds (juce::Rectangle<int>& b, const juce::Rectangle<int>& prev, const juce::Rectangle<int>& limits,
+                      bool top, bool left, bool bottom, bool right) override
+    {
+        juce::ComponentBoundsConstrainer::checkBounds (b, prev, limits, top, left, bottom, right);
+        const int mw = getMinimumWidth(), mh = getMinimumHeight();
+        if (b.getWidth() < mw || b.getHeight() < mh)
+        {
+            if (left) b.setLeft (b.getRight() - mw); else b.setWidth (mw);
+            if (top)  b.setTop (b.getBottom() - mh); else b.setHeight (mh);
+        }
+        // rapport fixe : la hauteur suit toujours la largeur (jamais en dessous du minimum)
+        const int h = juce::roundToInt ((double) b.getWidth() * (double) mh / (double) mw);
+        if (top) b.setTop (b.getBottom() - h); else b.setHeight (h);
+    }
+};
+
 class EightEchoEditor : public juce::AudioProcessorEditor
 {
 public:
@@ -86,10 +109,10 @@ public:
 private:
     EightEchoProcessor& proc;
     PedalView pedal;
-    juce::ComponentBoundsConstrainer constrainer;
+    StrictMinConstrainer constrainer;
     void showMenu();
     void setScale (float s);
-    float currentScale() const { return (float) getWidth() / (float) baseW; }
+    float currentScale() const { return juce::jmax (1.0f, (float) getWidth() / (float) baseW); }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EightEchoEditor)
 };
