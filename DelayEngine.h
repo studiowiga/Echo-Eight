@@ -365,9 +365,9 @@ public:
             if (p.mode == ANALOG || p.mode == WARM) fb *= 1.07f;   // compense la perte des filtres : l'oscillation reste possible
             if (p.mode == SHIM) fb *= 1.22f;
             if (p.mode == GLT) fb = 0.25f;                       // en GLT le knob = profondeur
-            fb = fb + (0.998f - fb) * warpAmt;                   // WARP : feedback -> ~1
+            fb = fb + (0.97f - fb) * warpAmt;                    // WARP : feedback monte (nappe), sans emballement
             fb = fb + (1.10f - fb) * twistFb;                    // TWIST : auto-oscillation
-            float lvl = levelGain (p.level) * (1.0f + 0.5f * warpAmt);  // WARP : niveau monte (~+3,5 dB)
+            float lvl = levelGain (p.level) * (1.0f + 0.12f * warpAmt); // WARP : legere montee (~+1 dB)
             if (p.mode == REVERSE && p.level > 0.985f) lvl = 1.0f;       // manuel : effet seul, meme niveau que l'entree
 
             // ------------- entree du delay selon le mode stereo -------------
@@ -429,8 +429,24 @@ public:
                 wetR = wetR * (1 - twistRot) + m * std::sin (th) * twistRot;
             }
 
-            const float g = lvl * outGate * modeFade;
-            wetL = softClip (wetL * g, 0.92f); wetR = softClip (wetR * g, 0.92f);
+            float g = lvl * outGate * modeFade;
+            {
+                // limiteur de securite des effets maintenus (WARP / GLT) : niveau de reference pris avant l'appui,
+                // le son humide ne peut pas depasser ~+2 dB de ce niveau (ni -12 dBFS si le delay etait silencieux)
+                const float e = std::max (std::abs (wetL), std::abs (wetR)) * g;
+                const bool holding = warpAmt > 0.02f || glitchActive || twistFb > 0.05f;
+                if (! holding) { holdRef += (e - holdRef) * (e > holdRef ? 0.002f : 0.00002f); }
+                env += (e - env) * (e > env ? 0.01f : 0.0002f);
+                if (holding)
+                {
+                    const float ceilv = std::max (0.25f, holdRef * 1.26f);
+                    const float want = env > ceilv ? ceilv / env : 1.0f;
+                    holdGain += (want - holdGain) * (want < holdGain ? 0.02f : 0.0005f);
+                }
+                else holdGain += (1.0f - holdGain) * 0.0005f;
+                g *= holdGain;
+            }
+            wetL = softClip (wetL * g, 0.85f); wetR = softClip (wetR * g, 0.85f);
 
             // REVERSE au max : effet seul a niveau unitaire
             float dryGain = (p.dryKill ? 0.0f : 1.0f) * std::min (1.0f, 2.0f * (1.0f - p.mix));
@@ -487,6 +503,7 @@ private:
     // twist / warp
     bool twistHeld = false; float twistT = 0, twistMul = 1.0f, twistFb = 0, twistRot = 0, twistRamp = 0, rotPhase = 0;
     float warpAmt = 0, warpAtk = 0, warpRel = 0;
+    float holdRef = 0.1f, env = 0, holdGain = 1.0f;
 
     // reverse
     float revPhase = 0, revLen = 0;
@@ -738,7 +755,7 @@ private:
             // sa longueur suit TIME / le tempo
         }
         const float g = glitchGain;
-        const float lv = 1.4f;
+        const float lv = 0.85f;   // tranche glitch au niveau du delay, pas plus fort
         wetL = wetL * (1 - g) + sL * g * lv;
         wetR = wetR * (1 - g) + sR * g * lv;
     }

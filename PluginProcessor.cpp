@@ -24,7 +24,6 @@ const Preset kPresets[] = {
     { "Dark BBD Wash",         ANALOG,   0.70f, 0.78f, 0.90f, W, false, 2 },
     { "Floating Tape Solo",    TAPE,     0.60f, 0.55f, 0.80f, W, false, 2 },
     { "Long Tape Ambience",    TAPE,     0.55f, 0.65f, 1.00f, W, true,  2 },
-    { "Runaway Tape (Twist)",  TAPE,     0.65f, 0.85f, 0.50f, W, false, 2 },
     // --- doux / modernes ---
     { "Soft Ballad",           WARM,     0.50f, 0.42f, 0.70f, P, false, 2 },
     { "Jazz Room",             WARM,     0.35f, 0.20f, 0.45f, I, false, 2 },
@@ -35,14 +34,14 @@ const Preset kPresets[] = {
     { "Cathedral",             PLUSRV,   0.65f, 0.70f, 1.00f, W, true,  2 },
     { "Heaven Swell",          SHIM,     0.60f, 0.60f, 0.80f, W, false, 2 },
     { "Octave Haze",           SHIM,     0.45f, 0.35f, 0.40f, I, false, 2 },
-    { "Dream Swell (hold)",    WARP,     0.50f, 0.50f, 0.65f, W, false, 2 },
-    { "Space Freeze (hold)",   WARP,     0.65f, 0.80f, 0.90f, P, true,  2 },
+    { "Dream Swell (hold)",    WARP,     0.38f, 0.45f, 0.65f, W, false, 2 },
+    { "Space Freeze (hold)",   WARP,     0.40f, 0.60f, 0.90f, P, true,  2 },
     // --- a l'envers / glitch ---
     { "Backwards Solo",        REVERSE,  1.00f, 0.25f, 0.30f, P, false, 2 },
     { "Backwards Pad",         REVERSE,  0.70f, 0.60f, 0.60f, W, true,  2 },
-    { "Machine Gun (hold)",    GLT,      0.70f, 0.70f, 0.35f, I, false, 2 },
-    { "Stutter Groove (hold)", GLT,      0.60f, 0.35f, 0.70f, P, false, 3 },
-    { "Granular Buzz (hold)",  GLT,      0.65f, 0.90f, 0.15f, I, false, 2 },
+    { "Machine Gun (hold)",    GLT,      0.48f, 0.70f, 0.35f, I, false, 2 },
+    { "Stutter Groove (hold)", GLT,      0.45f, 0.35f, 0.70f, P, false, 3 },
+    { "Granular Buzz (hold)",  GLT,      0.45f, 0.75f, 0.15f, I, false, 2 },
     // --- looper ---
     { "Looper",                LOOP,     0.80f, 0.40f, 0.50f, I, false, 2 },
 };

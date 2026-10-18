@@ -69,13 +69,13 @@ Tout est automatisable / assignable en MIDI dans Reaper (footswitch, tap, twist 
 
 ## Presets d'usine (clic droit → Factory presets, ou menu de presets du DAW)
 Classiques : Clean Slapback, Rockabilly Tape, Doubler, Bread & Butter, Dotted 8th Arena, Ping Pong Eighths  
-Vintage : BBD Crunch Lead, Dark BBD Wash, Floating Tape Solo, Long Tape Ambience, Runaway Tape (Twist)  
+Vintage : BBD Crunch Lead, Dark BBD Wash, Floating Tape Solo, Long Tape Ambience  
 Doux / modernes : Soft Ballad, Jazz Room, Lush Chorus Echo, 80s Stereo Lead  
 Espace : Echo Hall, Cathedral, Heaven Swell, Octave Haze, Dream Swell (hold), Space Freeze (hold)  
 À l'envers / glitch : Backwards Solo, Backwards Pad, Machine Gun (hold), Stutter Groove (hold), Granular Buzz (hold)  
 Looper : Looper
 
-« (hold) » = maintenir le footswitch ; « (Twist) » = appuyer sur TWIST.
+« (hold) » = maintenir le footswitch BYPASS.
 
 ## Version 1.3 – visuel à l'identique
 - Potards : ce sont ceux de l'image (moletage, reflet conique, ombre). Seul le repère blanc, découpé sur l'image, tourne : l'éclairage reste fixe comme sur une vraie pédale.
@@ -100,3 +100,7 @@ Looper : Looper
 - X2 : c'est la serigraphie X2 elle-meme qui s'illumine (meme forme, meme taille).
 - Looper : une boucle enregistree continue de tourner quand on choisit un autre mode ; on joue par-dessus avec cet effet, la boucle reste seche (elle ne passe jamais dans le delay). Son volume est celui regle avec E.LEVEL en mode LOOP. Pour l'arreter : revenir sur LOOP (double appui / maintien 2 s pour effacer). La ligne d'etat affiche « +LOOP » quand une boucle tourne sous l'effet.
 - Ligne d'etat agrandie ; DC 9V remonte pour lui laisser la place.
+
+## Version 1.4.1
+- Preset « Runaway Tape (Twist) » supprime (26 presets d'usine).
+- Presets « (hold) » et effets maintenus (WARP, GLT, TWIST) : niveau securise. Limiteur automatique : pendant le maintien, l'effet ne depasse jamais environ +2 dB du niveau d'avant l'appui. WARP monte en nappe sans emballement, GLT au niveau du delay. Presets hold avec E.LEVEL reduit.
