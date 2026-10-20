@@ -493,17 +493,17 @@ void EightEchoEditor::paint (Graphics& g)
     g.setGradientFill (ColourGradient (Colour (0xff1b1f25), W * 0.5f, H * 0.42f, Colour (0xff060708), W * 0.5f + W * 0.62f, H * 0.42f, true));
     g.fillRect (0.0f, 0.0f, W, H);
     const float cx = W * 0.5f, k = 0.62f;
-    drawPedalMotif (g, { cx, 470.0f }, k, 0.12f);
-    drawPedalMotif (g, { cx, 22.0f }, k, 0.12f);
-    drawPedalMotif (g, { 30.0f, 246.0f }, k * 0.8f, 0.09f);
-    drawPedalMotif (g, { W - 30.0f, 246.0f }, k * 0.8f, 0.09f);
-    drawPedalMotif (g, { 24.0f, 110.0f }, k * 0.55f, 0.07f);
-    drawPedalMotif (g, { W - 24.0f, 382.0f }, k * 0.55f, 0.07f);
-    drawPedalMotif (g, { 24.0f, 400.0f }, k * 0.45f, 0.06f);
-    drawPedalMotif (g, { W - 24.0f, 96.0f }, k * 0.45f, 0.06f);
+    drawPedalMotif (g, { cx, 470.0f }, k, 0.36f);
+    drawPedalMotif (g, { cx, 22.0f }, k, 0.36f);
+    drawPedalMotif (g, { 30.0f, 246.0f }, k * 0.8f, 0.30f);
+    drawPedalMotif (g, { W - 30.0f, 246.0f }, k * 0.8f, 0.30f);
+    drawPedalMotif (g, { 24.0f, 110.0f }, k * 0.55f, 0.26f);
+    drawPedalMotif (g, { W - 24.0f, 382.0f }, k * 0.55f, 0.26f);
+    drawPedalMotif (g, { 24.0f, 400.0f }, k * 0.45f, 0.22f);
+    drawPedalMotif (g, { W - 24.0f, 96.0f }, k * 0.45f, 0.22f);
 
     // vignettage leger des bords
-    g.setGradientFill (ColourGradient (Colours::transparentBlack, cx, H * 0.5f, Colours::black.withAlpha (0.55f), 0.0f, 0.0f, true));
+    g.setGradientFill (ColourGradient (Colours::transparentBlack, cx, H * 0.5f, Colours::black.withAlpha (0.22f), 0.0f, 0.0f, true));
     g.fillRect (0.0f, 0.0f, W, H);
     // ombre portee sous la pedale (boitier arrondi)
     const auto a = pedalArea();
