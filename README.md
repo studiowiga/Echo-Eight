@@ -29,7 +29,7 @@ Le VST3 se récupère dans l'onglet **Actions → artefacts**, à copier dans
 
 **Clic droit** (réglages cachés de la DD-8) : presets d'usine (chargés dans la mémoire en cours), mode stéréo
 (Independent / Wide / Panning), division du tap, sauvegarde en mémoire 1-7, carryover, SYNC, affectation de la pédale d'expression
-(paramètre EXP), taille de fenêtre (Default size / 60% / 75% / 100%, comme Textural et Freeze Shimmer). La fenêtre s'ouvre à sa taille par défaut (489 x 493) et ne peut pas être réduite en dessous.
+(paramètre EXP), taille de fenêtre (Default size / 60% / 75% / 100%, comme Textural et Freeze Shimmer). La fenêtre s'ouvre à sa taille par défaut (390 x 494) et ne peut pas être réduite en dessous.
 
 Tout est automatisable / assignable en MIDI dans Reaper (footswitch, tap, twist compris).
 
@@ -111,5 +111,5 @@ Looper : Looper
 - Bouton SAVE remplacé par **SYNC** (sérigraphie refaite dans la police de la pédale) : un clic cale le delay sur le tempo du DAW. Le capuchon s'éclaire en bleu glace et respire au tempo.
 - Mémoires : maintien 1 s sur une LED 1-7 = sauvegarde (ou clic droit › Save current settings to memory).
 - LED de tempo vérifiée et corrigée : elle tournait sur une horloge libre, décalée des taps et des temps du DAW. Elle est maintenant calée sur la position du DAW (temps de la mesure, signature rythmique comprise, 1er temps accentué) et repart exactement sur chaque tap.
-- Fenêtre homogénéisée avec Textural / Freeze Shimmer : 489 x 493 par défaut (minimum), pédale à 90 % de la hauteur, tailles Default / 60% / 75% / 100% (1984 x 2000).
+- Fenêtre et pédale calées sur Freeze Shimmer : 390 x 494 par défaut (minimum), boîtier haut de 465 px, tailles Default / 60% / 75% / 100% (2000 px de haut).
 - Aspect : éclairage doux derrière la pédale, ombre portée sous le boîtier, vignettage, ligne d'état ombrée pour la lisibilité, motifs d'anneaux replacés.

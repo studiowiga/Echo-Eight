@@ -463,9 +463,10 @@ void EightEchoEditor::resized()
 
 Rectangle<float> EightEchoEditor::pedalArea() const
 {
-    // comme Textural : la pedale fait 1805/2000 de la hauteur de la fenetre, centree
-    const float h = (float) baseH * 1805.0f / 2000.0f, w = h * PedalView::imgW / PedalView::imgH;
-    return { ((float) baseW - w) * 0.5f, ((float) baseH - h) * 0.5f, w, h };
+    // comme Freeze Shimmer : boitier (y 18..886 de l'image) haut de 465 px, son haut a 14 px, centre en largeur
+    const float ps = 465.0f / (886.0f - 18.0f);
+    const float w = PedalView::imgW * ps, h = PedalView::imgH * ps;
+    return { (float) baseW * 0.5f - 289.0f * ps, 14.0f - 18.0f * ps, w, h };
 }
 
 // Motif de la pedale : deux groupes d'anneaux concentriques + le "8" entrelace central
@@ -530,7 +531,7 @@ void EightEchoEditor::showMenu()
     exp.addItem (402, "Expression > FEEDBACK", true, val ("expFeedback") > 0.5f);
     exp.addItem (403, "Expression > TIME", true, val ("expTime") > 0.5f);
     const float cur = currentScale();
-    // memes tailles que Textural / Freeze Shimmer (100 % = 1984 x 2000)
+    // memes paliers que Textural / Freeze Shimmer (100 % = 2000 px de haut)
     const float pct[] = { 0.6f, 0.75f, 1.0f };
     size.addItem (501, "Default size", true, std::abs (cur - 1.0f) < 0.02f);
     for (int i = 0; i < 3; ++i)

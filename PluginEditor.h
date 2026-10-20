@@ -107,10 +107,10 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
 
     // Taille par defaut = taille minimale (impossible de reduire en dessous).
-    // Meme gabarit que Textural / Freeze Shimmer : fenetre 1984 x 2000 a 100 %, 489 x 493 par defaut,
-    // la pedale occupe ~90 % de la hauteur.
-    static constexpr int baseW = 489, baseH = 493;
-    static constexpr int refW = 1984, refH = 2000;
+    // Calee sur Freeze Shimmer : fenetre 390 x 494, boitier de la pedale haut de 465 px, 14 px sous le bord.
+    // 100 % = 2000 px de haut (memes paliers que Textural / Freeze Shimmer).
+    static constexpr int baseW = 390, baseH = 494;
+    static constexpr int refH = 2000, refW = (refH * baseW + baseH / 2) / baseH;
     static constexpr float maxScale = (float) refH / (float) baseH;
 
 private:
