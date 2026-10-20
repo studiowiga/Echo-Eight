@@ -116,3 +116,6 @@ Looper : Looper
 
 ## Version 1.5.1
 - Inscription « DC 9V » retirée du haut de la plaque ; la ligne d'état remonte légèrement.
+
+## Version 1.5.2
+- Ligne d'état discrète : elle n'apparaît que lorsqu'une information change (potard, mode, mémoire, tap, SYNC, looper…), reste affichée environ 2 s puis s'efface en fondu.

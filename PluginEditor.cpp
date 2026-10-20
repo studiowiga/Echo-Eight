@@ -335,11 +335,18 @@ void PedalView::paint (Graphics& g)
     {
         const auto txt = statusLine();
         const Rectangle<int> sr (64, 44, 450, 26);
-        g.setFont (FontOptions (Font::getDefaultMonospacedFontName(), 17.5f, Font::bold));
-        g.setColour (Colours::black.withAlpha (0.45f));                  // ombre : lisible comme une serigraphie
-        g.drawFittedText (txt, sr.translated (0, 1), Justification::centred, 1, 0.85f);
-        g.setColour (kSilk.withAlpha (0.92f));
-        g.drawFittedText (txt, sr, Justification::centred, 1, 0.85f);
+        if (txt != lastStatus) { lastStatus = txt; statusShownAt = anim; }   // une information a change
+        const float age = anim - statusShownAt;
+        const float vis = age < 1.8f ? jlimit (0.0f, 1.0f, age / 0.08f)          // apparition rapide
+                                     : jlimit (0.0f, 1.0f, 1.0f - (age - 1.8f) / 0.6f);   // puis fondu
+        if (vis > 0.01f)
+        {
+            g.setFont (FontOptions (Font::getDefaultMonospacedFontName(), 17.5f, Font::bold));
+            g.setColour (Colours::black.withAlpha (0.45f * vis));             // ombre : lisible comme une serigraphie
+            g.drawFittedText (txt, sr.translated (0, 1), Justification::centred, 1, 0.85f);
+            g.setColour (kSilk.withAlpha (0.92f * vis));
+            g.drawFittedText (txt, sr, Justification::centred, 1, 0.85f);
+        }
     }
 
     // etiquettes du selecteur de mode (comme la serigraphie DD-8)

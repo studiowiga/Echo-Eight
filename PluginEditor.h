@@ -51,6 +51,8 @@ private:
     int slotPress = -1; double slotPressTime = 0; bool slotSaved = false;
     int flashSlot = -1; float flashStart = 0;
     float anim = 0;
+    // ligne d'etat : n'apparait que quand une information change, puis s'efface
+    juce::String lastStatus; float statusShownAt = -100.0f;
 
     // geometrie (pixels de l'image)
     const juce::Point<float> cTap { 143, 775 }, cBypass { 438, 775 }, cX2 { 290, 778 };
