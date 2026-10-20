@@ -331,10 +331,10 @@ void PedalView::paint (Graphics& g)
 {
     g.drawImage (bg, Rectangle<float> (0, 0, imgW, imgH));
 
-    // ligne d'etat sous "DC 9V"
+    // ligne d etat en haut de la plaque
     {
         const auto txt = statusLine();
-        const Rectangle<int> sr (64, 52, 450, 26);
+        const Rectangle<int> sr (64, 44, 450, 26);
         g.setFont (FontOptions (Font::getDefaultMonospacedFontName(), 17.5f, Font::bold));
         g.setColour (Colours::black.withAlpha (0.45f));                  // ombre : lisible comme une serigraphie
         g.drawFittedText (txt, sr.translated (0, 1), Justification::centred, 1, 0.85f);

@@ -25,7 +25,7 @@ Le VST3 se récupère dans l'onglet **Actions → artefacts**, à copier dans
 | LED 1 à 7 | Mémoires : clic = rappel, **maintien 1 s = sauvegarde** (la LED clignote pour confirmer). LED pleine = réglage identique à la mémoire, LED adoucie = mémoire modifiée |
 | SYNC | Cale le delay sur le tempo du DAW (avec la division du tap). Bouton allumé bleu glace qui respire au tempo ; ligne d'état « SYNC120 » (« SYNC? » = pas de tempo reçu). Re-clic = retour à TIME / tap |
 | △ / ▽ | Mémoire précédente / suivante |
-| Ligne d'état (sous DC 9V) | Mémoire, mode, temps réel en ms, niveaux |
+| Ligne d'état (en haut) | Mémoire, mode, temps réel en ms, niveaux |
 
 **Clic droit** (réglages cachés de la DD-8) : presets d'usine (chargés dans la mémoire en cours), mode stéréo
 (Independent / Wide / Panning), division du tap, sauvegarde en mémoire 1-7, carryover, SYNC, affectation de la pédale d'expression
@@ -113,3 +113,6 @@ Looper : Looper
 - LED de tempo vérifiée et corrigée : elle tournait sur une horloge libre, décalée des taps et des temps du DAW. Elle est maintenant calée sur la position du DAW (temps de la mesure, signature rythmique comprise, 1er temps accentué) et repart exactement sur chaque tap.
 - Fenêtre et pédale calées sur Freeze Shimmer : 390 x 494 par défaut (minimum), boîtier haut de 465 px, tailles Default / 60% / 75% / 100% (2000 px de haut).
 - Aspect : éclairage doux derrière la pédale, ombre portée sous le boîtier, vignettage, ligne d'état ombrée pour la lisibilité, motifs d'anneaux replacés.
+
+## Version 1.5.1
+- Inscription « DC 9V » retirée du haut de la plaque ; la ligne d'état remonte légèrement.
