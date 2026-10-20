@@ -2,7 +2,6 @@
 
 Plugin VST3 (Windows / macOS, + AU sur Mac) reproduisant le fonctionnement d'un delay compact
 11 modes de type DD-8 : mêmes plages, mêmes commandes, mêmes interactions.
-Nom et interface provisoires, en attendant le visuel Studio Wiga.
 
 ## Compilation (GitHub)
 Tous les fichiers sont à la racine. Pousser le dossier sur le dépôt : le workflow
@@ -20,17 +19,17 @@ Le VST3 se récupère dans l'onglet **Actions → artefacts**, à copier dans
 | MODE | 11 positions, étiquetées autour du potard : clic sur une étiquette, glisser ou molette |
 | BYPASS (footswitch droit) | Le footswitch de la DD-8 : clic = on/off ; maintien 2 s = mode TEMPO ; en WARP/GLT maintien = effet ; en LOOP : rec → lecture → overdub, double appui = stop, maintien 2 s = effacer |
 | TAP (footswitch gauche) | Tap tempo ; **maintenu = TWIST** ; en LOOP : appui = stop, maintien 2 s = effacer |
-| LED gauche | Clignote au tempo (noire tapée / du DAW, sinon au temps de retard) ; scintille pendant le Twist |
+| LED gauche | Bat la mesure : calée sur la mesure du DAW quand SYNC est actif et que le DAW joue (1er temps plus fort) ; relancée exactement à chaque tap (1er tap = temps 1) ; sinon au temps de retard. Scintille pendant le Twist |
 | LED droite | Le témoin CHECK de la DD-8 : rouge = effet actif, vert = mode tempo / lecture loop, orange = overdub, clignotements = enregistrement / tap |
 | X2 | Temps doublé (sortie « Long » de la DD-8). S'illumine quand actif |
-| LED 1 à 7 | Mémoires : clic = rappel. LED pleine = réglage identique à la mémoire, LED adoucie = mémoire modifiée |
-| SAVE | Clic → les LED clignotent → clic sur une LED = sauvegarde. Re-clic sur SAVE = annuler |
+| LED 1 à 7 | Mémoires : clic = rappel, **maintien 1 s = sauvegarde** (la LED clignote pour confirmer). LED pleine = réglage identique à la mémoire, LED adoucie = mémoire modifiée |
+| SYNC | Cale le delay sur le tempo du DAW (avec la division du tap). Bouton allumé bleu glace qui respire au tempo ; ligne d'état « SYNC120 » (« SYNC? » = pas de tempo reçu). Re-clic = retour à TIME / tap |
 | △ / ▽ | Mémoire précédente / suivante |
 | Ligne d'état (sous DC 9V) | Mémoire, mode, temps réel en ms, niveaux |
 
 **Clic droit** (réglages cachés de la DD-8) : presets d'usine (chargés dans la mémoire en cours), mode stéréo
-(Independent / Wide / Panning), division du tap, carryover, synchro DAW, affectation de la pédale d'expression
-(paramètre EXP), taille de fenêtre. La fenêtre s'ouvre à sa taille par défaut et ne peut pas être réduite en dessous.
+(Independent / Wide / Panning), division du tap, sauvegarde en mémoire 1-7, carryover, SYNC, affectation de la pédale d'expression
+(paramètre EXP), taille de fenêtre (Default size / 60% / 75% / 100%, comme Textural et Freeze Shimmer). La fenêtre s'ouvre à sa taille par défaut (489 x 493) et ne peut pas être réduite en dessous.
 
 Tout est automatisable / assignable en MIDI dans Reaper (footswitch, tap, twist compris).
 
@@ -107,3 +106,10 @@ Looper : Looper
 
 ## Version 1.4.2
 - Redimensionnement : impossible de reduire la fenetre sous sa taille par defaut (380 x 493), que ce soit par le coin, par un bord, par l hote ou a la reouverture du projet. Le rapport largeur/hauteur reste fixe ; agrandissement jusqu a 200 %.
+
+## Version 1.5.0
+- Bouton SAVE remplacé par **SYNC** (sérigraphie refaite dans la police de la pédale) : un clic cale le delay sur le tempo du DAW. Le capuchon s'éclaire en bleu glace et respire au tempo.
+- Mémoires : maintien 1 s sur une LED 1-7 = sauvegarde (ou clic droit › Save current settings to memory).
+- LED de tempo vérifiée et corrigée : elle tournait sur une horloge libre, décalée des taps et des temps du DAW. Elle est maintenant calée sur la position du DAW (temps de la mesure, signature rythmique comprise, 1er temps accentué) et repart exactement sur chaque tap.
+- Fenêtre homogénéisée avec Textural / Freeze Shimmer : 489 x 493 par défaut (minimum), pédale à 90 % de la hauteur, tailles Default / 60% / 75% / 100% (1984 x 2000).
+- Aspect : éclairage doux derrière la pédale, ombre portée sous le boîtier, vignettage, ligne d'état ombrée pour la lisibilité, motifs d'anneaux replacés.

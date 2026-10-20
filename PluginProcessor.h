@@ -49,7 +49,11 @@ public:
     std::atomic<bool>  tapModeActive { false };
     std::atomic<int>   looperState { 0 };
     std::atomic<float> loopSeconds { 0.0f };
-    std::atomic<float> tapBlinkPhase { 0.0f };
+    std::atomic<float> tapBlinkPhase { 0.0f };   // phase dans le temps en cours (0 = debut du temps)
+    std::atomic<int>   tapBeat { 0 };            // numero du temps dans la mesure (0 = premier temps)
+    std::atomic<bool>  tapAccent { false };      // true : le premier temps est accentue (DAW / tap)
+    std::atomic<float> hostBpm { 0.0f };         // tempo du DAW (0 = inconnu)
+    std::atomic<bool>  hostLocked { false };     // SYNC actif ET tempo du DAW recu
     std::atomic<float> twistAmount { 0.0f };
     std::atomic<float> warpAmount { 0.0f };
     std::atomic<bool>  glitching { false };
@@ -83,6 +87,8 @@ private:
 
     // tap tempo
     std::vector<int64_t> taps; float tapQuarterMs = 0.0f; bool tapOverride = false; float knobAtTap = -1.0f;
+    int tapSeq = 0;                       // rang du tap dans la serie en cours
+    double ledPhase = 0.0; int ledBeat = 0; bool ledResync = false;
 
     void handleFootswitch (bool pressed, int mode, int blockLen);
     void registerTap();

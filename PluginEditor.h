@@ -22,6 +22,7 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
+    void saveToSlot (int i);
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     void mouseMove (const juce::MouseEvent&) override;
@@ -36,22 +37,24 @@ private:
     };
 
     EightEchoProcessor& proc;
-    juce::Image bg, x2On, ledsOn, lensIce, lensRed, lensGreen, lensOrange;
+    juce::Image bg, x2On, syncOn, ledsOn, lensIce, lensRed, lensGreen, lensOrange;
     std::array<juce::Image, 5> pointers;
     std::vector<Knob> knobs;
-    std::unique_ptr<juce::ParameterAttachment> longAtt;
-    bool longOn = false;
+    std::unique_ptr<juce::ParameterAttachment> longAtt, syncAtt;
+    bool longOn = false, syncParam = false;
 
     // etat souris
     int dragKnob = -1; float dragStartY = 0, dragStartVal = 0; int dragStartIndex = 0;
     enum Pressed { NONE, TAPFS, BYPASSFS };
     Pressed pressed = NONE; double tapPressTime = 0; bool twistSent = false;
-    bool saveMode = false;
+    // memoires : clic court = rappel, clic maintenu 1 s = sauvegarde
+    int slotPress = -1; double slotPressTime = 0; bool slotSaved = false;
+    int flashSlot = -1; float flashStart = 0;
     float anim = 0;
 
     // geometrie (pixels de l'image)
     const juce::Point<float> cTap { 143, 775 }, cBypass { 438, 775 }, cX2 { 290, 778 };
-    const juce::Point<float> cSave { 204, 488 }, cLedTempo { 144.5f, 621.1f }, cLedCheck { 434.2f, 620.2f };
+    const juce::Point<float> cSync { 204, 491.5f }, cLedTempo { 144.5f, 621.1f }, cLedCheck { 434.2f, 620.2f };
     const juce::Point<float> cPrev { 141, 679 }, cNext { 436, 676 };
     float slotY (int i) const { const float ys[] = { 124, 175, 228, 279, 331, 383, 435 }; return ys[i]; }
 
@@ -103,8 +106,12 @@ public:
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
 
-    // Taille par defaut = taille minimale (impossible de reduire en dessous)
-    static constexpr int baseW = 380, baseH = 493;
+    // Taille par defaut = taille minimale (impossible de reduire en dessous).
+    // Meme gabarit que Textural / Freeze Shimmer : fenetre 1984 x 2000 a 100 %, 489 x 493 par defaut,
+    // la pedale occupe ~90 % de la hauteur.
+    static constexpr int baseW = 489, baseH = 493;
+    static constexpr int refW = 1984, refH = 2000;
+    static constexpr float maxScale = (float) refH / (float) baseH;
 
 private:
     EightEchoProcessor& proc;
@@ -112,6 +119,7 @@ private:
     StrictMinConstrainer constrainer;
     void showMenu();
     void setScale (float s);
+    juce::Rectangle<float> pedalArea() const;      // emplacement de la pedale (coordonnees taille par defaut)
     float currentScale() const { return juce::jmax (1.0f, (float) getWidth() / (float) baseW); }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EightEchoEditor)

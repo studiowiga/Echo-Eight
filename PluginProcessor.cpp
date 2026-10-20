@@ -179,8 +179,10 @@ void EightEchoProcessor::prepareToPlay (double sampleRate, int)
 void EightEchoProcessor::registerTap()
 {
     const int64_t now = sampleClock;
-    if (! taps.empty() && (double) (now - taps.back()) / sr > 3.0) taps.clear();
+    if (! taps.empty() && (double) (now - taps.back()) / sr > 3.0) { taps.clear(); tapSeq = 0; }
     taps.push_back (now);
+    // la LED de tempo repart exactement sur chaque tap (le tap = un temps), le 1er tap = 1er temps
+    ledResync = true; ledBeat = tapSeq % 4; ++tapSeq;
     if (taps.size() > 4) taps.erase (taps.begin());
     if (taps.size() >= 2)
     {
@@ -276,10 +278,14 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     float lo, hi; modeRangeMs (mode, lo, hi);
     float ms = lo + (hi - lo) * time * time;
     float quarter = -1.0f;
-    if (p ("sync")->load() > 0.5f)
-        if (auto* ph = getPlayHead())
-            if (auto pos = ph->getPosition())
-                if (auto bpm = pos->getBpm()) quarter = (float) (60000.0 / juce::jmax (1.0, *bpm));
+    juce::Optional<juce::AudioPlayHead::PositionInfo> pos;
+    if (auto* ph = getPlayHead()) pos = ph->getPosition();
+    double bpm = 0.0;
+    if (pos.hasValue()) if (auto b = pos->getBpm()) bpm = *b;
+    const bool syncOn = p ("sync")->load() > 0.5f;            // bouton SYNC : delay cale sur le tempo du DAW
+    const bool locked = syncOn && bpm > 1.0;
+    if (locked) quarter = (float) (60000.0 / bpm);
+    hostBpm = (float) bpm; hostLocked = locked;
     if (quarter < 0 && tapOverride) quarter = tapQuarterMs;
     if (quarter > 0)
     {
@@ -315,9 +321,36 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     // ---- etat pour l'interface ----
     effectiveDelayMs = ms * (longMode ? 2.0f : 1.0f);
     twistAmount = engine.getTwistAmount(); warpAmount = engine.getWarpAmount(); glitching = engine.isGlitching();
-    // LED de tempo : clignote a la noire tapee / du DAW, sinon au temps de retard
-    const float q = quarter > 0 ? quarter : juce::jmax (60.0f, ms * (longMode ? 2.0f : 1.0f));
-    tapBlinkPhase = (float) std::fmod ((double) sampleClock / sr * 1000.0 / q, 1.0);
+    // LED de tempo : bat les temps.
+    //  - SYNC + DAW en lecture : calee sur la position du DAW (temps de la mesure, 1er temps accentue)
+    //  - tempo tape : repart sur chaque tap (chaque tap = un temps), 1er tap = 1er temps
+    //  - sinon : clignote au temps de retard
+    const double qms = quarter > 0 ? (double) quarter : (double) juce::jmax (60.0f, ms * (longMode ? 2.0f : 1.0f));
+    bool fromHost = false;
+    if (locked && pos.hasValue() && pos->getIsPlaying())
+        if (auto ppq = pos->getPpqPosition())
+        {
+            int num = 4, den = 4;
+            if (auto ts = pos->getTimeSignature()) { num = juce::jmax (1, ts->numerator); den = juce::jmax (1, ts->denominator); }
+            const double beatQ = 4.0 / (double) den;                         // longueur d'un temps en noires
+            const double bar = pos->getPpqPositionOfLastBarStart().orFallback (0.0);
+            const double endPpq = *ppq + (double) n / sr * bpm / 60.0;          // fin du bloc = ce que l'on voit
+            double inBar = (endPpq - bar) / beatQ;
+            if (inBar < 0) inBar = endPpq / beatQ;
+            const double beats = std::floor (inBar);
+            ledPhase = inBar - beats;
+            ledBeat = (int) std::fmod (beats, (double) num); if (ledBeat < 0) ledBeat += num;
+            fromHost = true;
+        }
+    if (! fromHost)
+    {
+        if (ledResync) { ledPhase = 0.0; ledResync = false; }
+        ledPhase += (double) n / sr * 1000.0 / qms;
+        while (ledPhase >= 1.0) { ledPhase -= 1.0; ledBeat = (ledBeat + 1) % 4; }
+    }
+    tapBlinkPhase = (float) ledPhase;
+    tapBeat = ledBeat;
+    tapAccent = fromHost || (tapOverride && ! locked) || locked;
     auto& lp = engine.getLooper();
     looperState = (int) lp.state;
     loopSeconds = (float) (lp.state == Looper::RECORDING ? lp.pos : lp.len) / (float) sr;
