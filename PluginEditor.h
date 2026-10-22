@@ -28,6 +28,7 @@ public:
     void mouseMove (const juce::MouseEvent&) override;
 
     std::function<void (const juce::MouseEvent&)> onBackgroundRightClick;
+    std::function<void()> onTimerTick;      // appele a chaque tic du timer de l'interface (anti-gel Windows)
 
 private:
     struct Knob
@@ -54,6 +55,12 @@ private:
     // ligne d'etat : n'apparait que quand une information change, puis s'efface
     juce::String lastStatus; float statusShownAt = -100.0f;
 
+    // dernier etat reellement dessine : on ne redessine une zone que si elle a change
+    std::array<float, 7> drawnLed { -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f };
+    float drawnSync = -1.0f, drawnTempo = -1.0f, drawnStatusAlpha = -1.0f;
+    juce::uint32 drawnCheck = 0x12345678;
+    juce::String drawnStatus { "\x01" };
+
     // geometrie (pixels de l'image)
     const juce::Point<float> cTap { 143, 775 }, cBypass { 438, 775 }, cX2 { 290, 778 };
     const juce::Point<float> cSync { 204, 491.5f }, cLedTempo { 144.5f, 621.1f }, cLedCheck { 434.2f, 620.2f };
@@ -74,6 +81,12 @@ private:
     void drawLens (juce::Graphics&, bool left, const juce::Image* lit, float amount);
     juce::String statusLine() const;
     juce::Colour checkColour() const;
+    // valeurs affichees (communes au dessin et a la detection de changement du timer)
+    float ledBrightness (int slot, int cur, bool dirty) const;
+    float beatFlash() const;
+    float syncAlpha() const;
+    float tempoAmount() const;
+    float statusVisibility() const;
 };
 
 // Contrainte de taille stricte : jamais plus petit que la taille par defaut, quel que soit
@@ -106,6 +119,7 @@ public:
     ~EightEchoEditor() override = default;
     void paint (juce::Graphics&) override;
     void resized() override;
+    void parentHierarchyChanged() override;
     void mouseDown (const juce::MouseEvent&) override;
 
     // Taille par defaut = taille minimale (impossible de reduire en dessous).
@@ -119,6 +133,7 @@ private:
     EightEchoProcessor& proc;
     PedalView pedal;
     StrictMinConstrainer constrainer;
+    void useSoftwareRenderer();
     void showMenu();
     void setScale (float s);
     juce::Rectangle<float> pedalArea() const;      // emplacement de la pedale (coordonnees taille par defaut)

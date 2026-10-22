@@ -119,3 +119,8 @@ Looper : Looper
 
 ## Version 1.5.2
 - Ligne d'état discrète : elle n'apparaît que lorsqu'une information change (potard, mode, mémoire, tap, SYNC, looper…), reste affichée environ 2 s puis s'efface en fondu.
+
+## Version 1.5.3
+- Correctif anti-gel de la fenêtre sous Windows (Reaper notamment) : l'interface est dessinée avec le moteur logiciel au lieu de Direct2D, qui pouvait figer la fenêtre avec certains pilotes graphiques.
+- L'interface ne redessine plus que ce qui change réellement (LED, ligne d'état, SYNC) : aucun travail au repos.
+- Redimensionnement : tolérance de 2 px pour éviter une boucle avec l'hôte quand Windows est à 125 / 150 %.

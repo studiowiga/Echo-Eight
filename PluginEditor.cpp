@@ -225,6 +225,7 @@ void PedalView::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)
 
 void PedalView::timerCallback()
 {
+    if (onTimerTick) onTimerTick();   // anti-gel Windows : l'editeur verifie le moteur de rendu
     anim += 1.0f / 30.0f;
     // TAP maintenu : TWIST (et, en LOOP, maintien 2 s = effacer)
     if (pressed == TAPFS && ! twistSent)
@@ -243,7 +244,53 @@ void PedalView::timerCallback()
         saveToSlot (slotPress); slotSaved = true;
     }
     if (flashSlot >= 0 && anim - flashStart > 1.2f) flashSlot = -1;
-    repaint();
+
+    // on ne redessine une zone que si ce qu'elle affiche a vraiment change (zero travail au repos).
+    // Les potards, le selecteur de mode, X2, SYNC on/off et les footswitchs redessinent deja
+    // eux-memes (attachements de parametres, clics souris).
+    auto changed = [] (float& drawn, float now) { if (std::abs (drawn - now) < 0.002f) return false; drawn = now; return true; };
+    auto zone = [this] (Rectangle<float> r) { repaint (r.getSmallestIntegerContainer().expanded (3)); };
+
+    // ligne d'etat : texte et fondu
+    const auto txt = statusLine();
+    if (txt != lastStatus) { lastStatus = txt; statusShownAt = anim; }   // une information a change
+    const bool alphaChanged = changed (drawnStatusAlpha, statusVisibility());
+    if (txt != drawnStatus || alphaChanged)
+    {
+        drawnStatus = txt;
+        zone ({ 64.0f, 44.0f, 450.0f, 27.0f });
+    }
+
+    // LED des memoires 1 a 7
+    const int cur = proc.getCurrentSlot();
+    const bool dirty = ! proc.slotMatchesCurrent (cur);
+    for (int i = 0; i < EightEchoProcessor::kNumSlots; ++i)
+    {
+        if (changed (drawnLed[(size_t) i], ledBrightness (i, cur, dirty)))
+        {
+            const float top = (i == 0 ? 95.0f : 0.5f * (slotY (i - 1) + slotY (i)));
+            const float bot = (i == EightEchoProcessor::kNumSlots - 1 ? 465.0f : 0.5f * (slotY (i) + slotY (i + 1)));
+            zone ({ 0.0f, top, (float) ledsOn.getWidth(), bot - top });
+        }
+    }
+
+    // capuchon SYNC (respire au tempo)
+    if (changed (drawnSync, syncParam ? syncAlpha() : 0.0f))
+        zone ({ 139.0f, 426.0f, (float) syncOn.getWidth(), (float) syncOn.getHeight() });
+
+    // LED de tempo
+    if (changed (drawnTempo, tempoAmount()))
+        zone ({ 104.0f, 581.0f, (float) lensIce.getWidth(), (float) lensIce.getHeight() });
+
+    // LED CHECK
+    const auto argb = checkColour().getARGB();
+    if (argb != drawnCheck)
+    {
+        drawnCheck = argb;
+        const float w = (float) jmax (lensRed.getWidth(), lensGreen.getWidth(), lensOrange.getWidth());
+        const float h = (float) jmax (lensRed.getHeight(), lensGreen.getHeight(), lensOrange.getHeight());
+        zone ({ 394.0f, 580.0f, w, h });
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -300,6 +347,47 @@ Colour PedalView::checkColour() const
     }
 }
 
+float PedalView::ledBrightness (int i, int cur, bool dirty) const
+{
+    float b = 0.0f;
+    if (i == flashSlot) b = std::fmod ((anim - flashStart) * 5.0f, 1.0f) < 0.5f ? 1.0f : 0.15f;   // confirmation
+    else if (i == slotPress && ! slotSaved)
+    {
+        const float held = (float) ((Time::getMillisecondCounterHiRes() - slotPressTime) / 1000.0);
+        b = held > 0.25f ? 0.3f + 0.7f * jlimit (0.0f, 1.0f, (held - 0.25f) / 0.75f) * (0.6f + 0.4f * std::sin (anim * 14.0f)) : 1.0f;
+    }
+    else if (i == cur) b = dirty ? 0.45f + 0.15f * std::sin (anim * 3.0f) : 1.0f;   // memoire modifiee : LED adoucie
+    return b;
+}
+
+float PedalView::beatFlash() const
+{
+    return jlimit (0.0f, 1.0f, 1.0f - proc.tapBlinkPhase.load() * 4.0f);
+}
+
+float PedalView::syncAlpha() const
+{
+    return proc.hostLocked.load() ? 0.86f + 0.14f * beatFlash()                // respire au tempo
+                                  : 0.25f + 0.15f * std::sin (anim * 4.0f);   // pas de tempo du DAW
+}
+
+float PedalView::tempoAmount() const
+{
+    // la LED de tempo bat les temps ; le premier temps de la mesure (DAW) / du tap est plus fort
+    const bool twisting = proc.twistAmount.load() > 0.05f;
+    const bool accent = proc.tapAccent.load();
+    const float peak = (! accent || proc.tapBeat.load() == 0) ? 1.0f : 0.55f;
+    return twisting ? (std::fmod (anim * 12.0f, 1.0f) < 0.5f ? 1.0f : 0.15f)
+                    : peak * beatFlash();                                     // eclair puis extinction douce
+}
+
+float PedalView::statusVisibility() const
+{
+    const float age = anim - statusShownAt;
+    return age < 1.8f ? jlimit (0.0f, 1.0f, age / 0.08f)                      // apparition rapide
+                      : jlimit (0.0f, 1.0f, 1.0f - (age - 1.8f) / 0.6f);      // puis fondu
+}
+
 String PedalView::statusLine() const
 {
     auto& s = proc.apvts;
@@ -336,9 +424,7 @@ void PedalView::paint (Graphics& g)
         const auto txt = statusLine();
         const Rectangle<int> sr (64, 44, 450, 26);
         if (txt != lastStatus) { lastStatus = txt; statusShownAt = anim; }   // une information a change
-        const float age = anim - statusShownAt;
-        const float vis = age < 1.8f ? jlimit (0.0f, 1.0f, age / 0.08f)          // apparition rapide
-                                     : jlimit (0.0f, 1.0f, 1.0f - (age - 1.8f) / 0.6f);   // puis fondu
+        const float vis = statusVisibility();
         if (vis > 0.01f)
         {
             g.setFont (FontOptions (Font::getDefaultMonospacedFontName(), 17.5f, Font::bold));
@@ -370,39 +456,19 @@ void PedalView::paint (Graphics& g)
     const int cur = proc.getCurrentSlot();
     const bool dirty = ! proc.slotMatchesCurrent (cur);
     for (int i = 0; i < EightEchoProcessor::kNumSlots; ++i)
-    {
-        float b = 0.0f;
-        if (i == flashSlot) b = std::fmod ((anim - flashStart) * 5.0f, 1.0f) < 0.5f ? 1.0f : 0.15f;   // confirmation
-        else if (i == slotPress && ! slotSaved)
-        {
-            const float held = (float) ((Time::getMillisecondCounterHiRes() - slotPressTime) / 1000.0);
-            b = held > 0.25f ? 0.3f + 0.7f * jlimit (0.0f, 1.0f, (held - 0.25f) / 0.75f) * (0.6f + 0.4f * std::sin (anim * 14.0f)) : 1.0f;
-        }
-        else if (i == cur) b = dirty ? 0.45f + 0.15f * std::sin (anim * 3.0f) : 1.0f;   // memoire modifiee : LED adoucie
-        drawLedPipe (g, i, b);
-    }
+        drawLedPipe (g, i, ledBrightness (i, cur, dirty));
 
     // bouton SYNC : le capuchon depoli s'eclaire en bleu glace quand le delay suit le tempo du DAW
-    const float ph = proc.tapBlinkPhase.load();
-    const float beatFlash = jlimit (0.0f, 1.0f, 1.0f - ph * 4.0f);
     if (syncParam)
     {
-        const bool lockedNow = proc.hostLocked.load();
-        const float a = lockedNow ? 0.86f + 0.14f * beatFlash                     // respire au tempo
-                                  : 0.25f + 0.15f * std::sin (anim * 4.0f);        // pas de tempo du DAW
         Graphics::ScopedSaveState ss (g);
-        g.setOpacity (a);
+        g.setOpacity (syncAlpha());
         g.drawImageAt (syncOn, 139, 426);
     }
 
     // LED de tempo (au-dessus de TAP) et LED CHECK (au-dessus de BYPASS) : lentilles d'origine allumees
     // la LED de tempo bat les temps ; le premier temps de la mesure (DAW) / du tap est plus fort
-    const bool twisting = proc.twistAmount.load() > 0.05f;
-    const bool accent = proc.tapAccent.load();
-    const float peak = (! accent || proc.tapBeat.load() == 0) ? 1.0f : 0.55f;
-    const float tempoAmt = twisting ? (std::fmod (anim * 12.0f, 1.0f) < 0.5f ? 1.0f : 0.15f)
-                                    : peak * beatFlash;                         // eclair puis extinction douce
-    drawLens (g, true, &lensIce, tempoAmt);
+    drawLens (g, true, &lensIce, tempoAmount());
     const auto cc = checkColour();
     if (! cc.isTransparent())
     {
@@ -432,6 +498,9 @@ EightEchoEditor::EightEchoEditor (EightEchoProcessor& p) : AudioProcessorEditor 
 {
     addAndMakeVisible (pedal);
     pedal.onBackgroundRightClick = [this] (const MouseEvent&) { showMenu(); };
+    // le timer de l'interface est celui de la pedale : a chaque tic on verifie le moteur de rendu,
+    // au cas ou la fenetre a ete recreee par l'hote (changement d'ecran, d'echelle...)
+    pedal.onTimerTick = [this] { useSoftwareRenderer(); };
 
     // l'ordre compte : setResizable() d'abord (il cree le coin de redimensionnement),
     // puis notre contrainte stricte, pour que le coin ET l'hote l'utilisent
@@ -451,10 +520,34 @@ void EightEchoEditor::setScale (float s)
     setSize (roundToInt (baseW * s), roundToInt (baseH * s));
 }
 
+//==============================================================================
+// Anti-gel de la fenetre (Windows) : JUCE 8 dessine par defaut avec Direct2D (carte graphique).
+// Avec certains pilotes (Intel notamment) la fenetre du plugin cesse de se rafraichir alors que
+// le DAW continue de tourner. Le moteur logiciel est stable partout et largement assez rapide ici.
+void EightEchoEditor::useSoftwareRenderer()
+{
+   #if JUCE_WINDOWS
+    if (auto* peer = getPeer())
+    {
+        int sw = peer->getAvailableRenderingEngines().indexOf ("Software Renderer");
+        if (sw < 0) sw = 0;
+        if (peer->getCurrentRenderingEngine() != sw)
+            peer->setCurrentRenderingEngine (sw);
+    }
+   #endif
+}
+
+void EightEchoEditor::parentHierarchyChanged()
+{
+    useSoftwareRenderer();
+}
+
 void EightEchoEditor::resized()
 {
     // filet de securite : si un hote impose malgre tout une taille plus petite, on revient a la taille par defaut
-    if (getWidth() < baseW || getHeight() < baseH)
+    // tolerance de 2 px : avec la mise a l'echelle Windows (125 %, 150 %...) l'hote arrondit les tailles ;
+    // sans marge, les deux se renvoient la fenetre en boucle
+    if (getWidth() < baseW - 2 || getHeight() < baseH - 2)
     {
         juce::Component::SafePointer<EightEchoEditor> self (this);
         juce::MessageManager::callAsync ([self] { if (self != nullptr) self->setSize (baseW, baseH); });
