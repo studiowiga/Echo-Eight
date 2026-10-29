@@ -134,3 +134,5 @@ Looper : Looper
 ## Version 1.7.0
 - v1.7.0 : MIDI Learn sur toutes les commandes (clic droit sur une commande ou menu MIDI), assignations sauvegardées avec le projet
 - CC par défaut : E.LEVEL 20, MIX 21, FEEDBACK 22, TIME 23, MODE 24, X2 25, SYNC 26, EXP 27, BYPASS 80, TAP 81, PREV MEMORY 82, NEXT MEMORY 83.
+
+- v1.7.2 : menu de taille de fenêtre : « 60 % (default) », 75 %, 100 % (plus de taille en pixels)

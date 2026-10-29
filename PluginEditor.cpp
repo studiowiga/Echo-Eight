@@ -750,9 +750,9 @@ void EightEchoEditor::showMenu (int learnTarget)
     const float cur = currentScale();
     // memes paliers que Textural / Freeze Shimmer (100 % = 2000 px de haut)
     const float pct[] = { 0.6f, 0.75f, 1.0f };
-    size.addItem (501, "Default size", true, std::abs (cur - 1.0f) < 0.02f);
-    for (int i = 0; i < 3; ++i)
-        size.addItem (502 + i, String (roundToInt (pct[i] * 100.0f)) + "%", true, std::abs (cur - pct[i] * maxScale) < 0.02f);
+    size.addItem (501, "60 % (default)", true, std::abs (cur - 1.0f) < 0.02f);
+    for (int i = 1; i < 3; ++i)
+        size.addItem (502 + i, String (roundToInt (pct[i] * 100.0f)) + " %", true, std::abs (cur - pct[i] * maxScale) < 0.02f);
     PopupMenu save;
     for (int i = 0; i < EightEchoProcessor::kNumSlots; ++i) save.addItem (700 + i, "Memory " + String (i + 1));
 
