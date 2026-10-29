@@ -29,6 +29,7 @@ public:
 
     std::function<void (const juce::MouseEvent&)> onBackgroundRightClick;
     std::function<void()> onTimerTick;      // appele a chaque tic du timer de l'interface (anti-gel Windows)
+    std::function<void()> onRepaintStuck;   // chien de garde (anti-gel v2) : un redessin demande n'est pas arrive
 
 private:
     struct Knob
@@ -60,6 +61,9 @@ private:
     float drawnSync = -1.0f, drawnTempo = -1.0f, drawnStatusAlpha = -1.0f;
     juce::uint32 drawnCheck = 0x12345678;
     juce::String drawnStatus { "\x01" };
+    // anti-gel v2 : suivi des redessins demandes par le timer (chien de garde)
+    double lastPaintMs = 0.0, repaintAskedMs = 0.0;
+    void askRepaint (juce::Rectangle<int> r);
 
     // geometrie (pixels de l'image)
     const juce::Point<float> cTap { 143, 775 }, cBypass { 438, 775 }, cX2 { 290, 778 };
@@ -120,6 +124,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void parentHierarchyChanged() override;
+    void visibilityChanged() override;
     void mouseDown (const juce::MouseEvent&) override;
 
     // Taille par defaut = taille minimale (impossible de reduire en dessous).
@@ -134,10 +139,22 @@ private:
     PedalView pedal;
     StrictMinConstrainer constrainer;
     void useSoftwareRenderer();
+    void tick();                                   // appele par le timer de la pedale (30 Hz)
+    void rebuildCaches (float scale = 0.0f);
+    float physicalScale() const;
+    void drawBackdrop (juce::Graphics&) const;     // fond, motifs et ombre (dessines dans le cache)
     void showMenu();
     void setScale (float s);
     juce::Rectangle<float> pedalArea() const;      // emplacement de la pedale (coordonnees taille par defaut)
     float currentScale() const { return juce::jmax (1.0f, (float) getWidth() / (float) baseW); }
+
+    // anti-gel v2 : fond de la fenetre en cache (refait par le timer), suivi de la fenetre hote et de l'echelle
+    juce::Image bgCache;
+    int cacheW = 0, cacheH = 0;
+    float cacheScale = 0.0f;
+    int resizeSettle = 0;
+    void* lastPeer = nullptr;
+    double lastScaleCheckMs = 0.0, lastRendererCheckMs = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EightEchoEditor)
 };

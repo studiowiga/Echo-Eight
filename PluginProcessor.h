@@ -10,11 +10,12 @@
 //  pilotee par le parametre "footswitch" : le footswitch se comporte donc
 //  exactement pareil a la souris ou via un controleur MIDI assigne dans le DAW.
 // =============================================================================
-class EightEchoProcessor : public juce::AudioProcessor
+class EightEchoProcessor : public juce::AudioProcessor,
+                           private juce::Timer
 {
 public:
     EightEchoProcessor();
-    ~EightEchoProcessor() override = default;
+    ~EightEchoProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -95,6 +96,25 @@ private:
 
     juce::AudioParameterBool* pOn = nullptr;
     std::atomic<float>* p(const char* id) { return apvts.getRawParameterValue (id); }
+
+    // Anti-gel v2 : parametres lus par le thread audio via des pointeurs obtenus une fois (constructeur),
+    // jamais de recherche par chaine dans processBlock
+    std::atomic<float> *rMode = nullptr, *rFootswitch = nullptr, *rTap = nullptr, *rTwist = nullptr,
+                       *rExp = nullptr, *rLevel = nullptr, *rFeedback = nullptr, *rTime = nullptr,
+                       *rExpLevel = nullptr, *rExpFeedback = nullptr, *rExpTime = nullptr, *rLong = nullptr,
+                       *rSync = nullptr, *rDivision = nullptr, *rDryKill = nullptr, *rMix = nullptr,
+                       *rStereo = nullptr, *rOn = nullptr, *rCarryover = nullptr;
+    std::vector<float> monoTmp;           // tampon mono prepare hors du thread audio
+
+    // Anti-gel v2 : depuis le thread audio, aucun appel a l'hote ; les valeurs sont mises en file
+    // et transmises au DAW par un timer du thread de messages (60 Hz).
+    void timerCallback() override;
+    void setParamFromAudio (const char* id, float plain);
+    float queuedOrCurrent (const char* id, std::atomic<float>* current) const;
+    static constexpr int numQueued = 1;
+    static const char* queuedId (int i);
+    std::atomic<float> pendingValue[numQueued];
+    std::atomic<bool>  pendingSet[numQueued];
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EightEchoProcessor)
 };

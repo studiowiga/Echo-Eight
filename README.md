@@ -124,3 +124,6 @@ Looper : Looper
 - Correctif anti-gel de la fenêtre sous Windows (Reaper notamment) : l'interface est dessinée avec le moteur logiciel au lieu de Direct2D, qui pouvait figer la fenêtre avec certains pilotes graphiques.
 - L'interface ne redessine plus que ce qui change réellement (LED, ligne d'état, SYNC) : aucun travail au repos.
 - Redimensionnement : tolérance de 2 px pour éviter une boucle avec l'hôte quand Windows est à 125 / 150 %.
+
+## Version 1.6.0
+- v1.6.0 : anti-gel v2 (JUCE 8.0.15, caches refaits par le timer, chien de garde, aucun appel à l'hôte depuis le thread audio)

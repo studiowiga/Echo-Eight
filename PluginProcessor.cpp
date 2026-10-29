@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cstring>
 
 using namespace wiga;
 
@@ -95,7 +96,57 @@ EightEchoProcessor::EightEchoProcessor()
       apvts (*this, nullptr, "PARAMS", createLayout())
 {
     pOn = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter ("on"));
+    rMode = p ("mode"); rFootswitch = p ("footswitch"); rTap = p ("tap"); rTwist = p ("twist");
+    rExp = p ("exp"); rLevel = p ("elevel"); rFeedback = p ("feedback"); rTime = p ("time");
+    rExpLevel = p ("expLevel"); rExpFeedback = p ("expFeedback"); rExpTime = p ("expTime"); rLong = p ("long");
+    rSync = p ("sync"); rDivision = p ("division"); rDryKill = p ("drykill"); rMix = p ("mix");
+    rStereo = p ("stereo"); rOn = p ("on"); rCarryover = p ("carryover");
+    taps.reserve (8);
+    for (int i = 0; i < numQueued; ++i) { pendingValue[i].store (0.0f); pendingSet[i].store (false); }
     initSlots();
+    startTimerHz (60);
+}
+
+EightEchoProcessor::~EightEchoProcessor()
+{
+    stopTimer();
+}
+
+// ---------------------------------------------------------------------------
+//  Anti-gel v2 (Studio Wiga) : jamais d'appel a l'hote (setValueNotifyingHost) depuis le thread audio.
+//  Le footswitch met la valeur en file ; un timer du thread de messages la transmet au DAW.
+// ---------------------------------------------------------------------------
+const char* EightEchoProcessor::queuedId (int i)
+{
+    static const char* ids[numQueued] = { "on" };
+    return ids[juce::jlimit (0, numQueued - 1, i)];
+}
+
+void EightEchoProcessor::setParamFromAudio (const char* id, float plain)
+{
+    for (int i = 0; i < numQueued; ++i)
+        if (std::strcmp (id, queuedId (i)) == 0)
+        {
+            pendingValue[i].store (plain, std::memory_order_relaxed);
+            pendingSet[i].store (true, std::memory_order_release);
+            return;
+        }
+}
+
+float EightEchoProcessor::queuedOrCurrent (const char* id, std::atomic<float>* current) const
+{
+    for (int i = 0; i < numQueued; ++i)
+        if (std::strcmp (id, queuedId (i)) == 0 && pendingSet[i].load (std::memory_order_acquire))
+            return pendingValue[i].load (std::memory_order_relaxed);
+    return current->load (std::memory_order_relaxed);
+}
+
+void EightEchoProcessor::timerCallback()
+{
+    for (int i = 0; i < numQueued; ++i)
+        if (pendingSet[i].exchange (false, std::memory_order_acquire))
+            if (auto* prm = apvts.getParameter (queuedId (i)))
+                prm->setValueNotifyingHost (prm->convertTo0to1 (pendingValue[i].load (std::memory_order_relaxed)));
 }
 
 // ---------------------------------------------------------------------------
@@ -170,9 +221,10 @@ bool EightEchoProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
     return in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo();
 }
 
-void EightEchoProcessor::prepareToPlay (double sampleRate, int)
+void EightEchoProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     sr = sampleRate;
+    monoTmp.assign ((size_t) juce::jmax (samplesPerBlock, 4096), 0.0f);
     engine.prepare (sampleRate);
 }
 
@@ -190,14 +242,14 @@ void EightEchoProcessor::registerTap()
         double q = 1000.0 * sum / (double) (taps.size() - 1) / sr;
         tapQuarterMs = (float) juce::jlimit (200.0, 2500.0, q);   // BPM 24..300
         tapOverride = true;
-        knobAtTap = p ("time")->load();
+        knobAtTap = rTime->load (std::memory_order_relaxed);
     }
 }
 
 void EightEchoProcessor::handleFootswitch (bool pressed, int mode, int blockLen)
 {
     auto& looper = engine.getLooper();
-    const bool on = p ("on")->load() > 0.5f;
+    const bool on = queuedOrCurrent ("on", rOn) > 0.5f;   // bascule : valeur en file si elle existe
 
     if (pressed && ! fsPrev)
     {
@@ -237,7 +289,7 @@ void EightEchoProcessor::handleFootswitch (bool pressed, int mode, int blockLen)
     {
         fsHoldFx = false;
         if (mode != LOOP && ! fsConsumed && pOn != nullptr)
-            pOn->setValueNotifyingHost (on ? 0.0f : 1.0f);
+            setParamFromAudio ("on", on ? 0.0f : 1.0f);      // transmis a l'hote par le timer
     }
     fsPrev = pressed;
 }
@@ -252,10 +304,10 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     // mono -> stereo
     if (numIn == 1 && buffer.getNumChannels() > 1) buffer.copyFrom (1, 0, buffer, 0, 0, n);
 
-    const int mode = (int) p ("mode")->load();
-    const bool fs = p ("footswitch")->load() > 0.5f;
-    const bool tapP = p ("tap")->load() > 0.5f;
-    const bool twistP = p ("twist")->load() > 0.5f;
+    const int mode = (int) rMode->load (std::memory_order_relaxed);
+    const bool fs = rFootswitch->load (std::memory_order_relaxed) > 0.5f;
+    const bool tapP = rTap->load (std::memory_order_relaxed) > 0.5f;
+    const bool twistP = rTwist->load (std::memory_order_relaxed) > 0.5f;
 
     handleFootswitch (fs, mode, n);
     if (mode == LOOP) tapModeActive = false;
@@ -266,15 +318,15 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     tapPrev = tapP; twistPrevForLoop = twistP;
 
     // ---- expression ----
-    const float exp = p ("exp")->load();
-    float level = p ("elevel")->load(), fb = p ("feedback")->load(), time = p ("time")->load();
-    if (p ("expLevel")->load() > 0.5f)    level *= exp;
-    if (p ("expFeedback")->load() > 0.5f) fb *= exp;
-    if (p ("expTime")->load() > 0.5f)     time *= exp;
+    const float exp = rExp->load (std::memory_order_relaxed);
+    float level = rLevel->load (std::memory_order_relaxed), fb = rFeedback->load (std::memory_order_relaxed), time = rTime->load (std::memory_order_relaxed);
+    if (rExpLevel->load (std::memory_order_relaxed) > 0.5f)    level *= exp;
+    if (rExpFeedback->load (std::memory_order_relaxed) > 0.5f) fb *= exp;
+    if (rExpTime->load (std::memory_order_relaxed) > 0.5f)     time *= exp;
 
     // ---- temps de retard ----
-    if (tapOverride && std::abs (p ("time")->load() - knobAtTap) > 0.012f) tapOverride = false;   // tourner TIME annule le tap
-    const bool longMode = p ("long")->load() > 0.5f;
+    if (tapOverride && std::abs (rTime->load (std::memory_order_relaxed) - knobAtTap) > 0.012f) tapOverride = false;   // tourner TIME annule le tap
+    const bool longMode = rLong->load (std::memory_order_relaxed) > 0.5f;
     float lo, hi; modeRangeMs (mode, lo, hi);
     float ms = lo + (hi - lo) * time * time;
     float quarter = -1.0f;
@@ -282,14 +334,14 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     if (auto* ph = getPlayHead()) pos = ph->getPosition();
     double bpm = 0.0;
     if (pos.hasValue()) if (auto b = pos->getBpm()) bpm = *b;
-    const bool syncOn = p ("sync")->load() > 0.5f;            // bouton SYNC : delay cale sur le tempo du DAW
+    const bool syncOn = rSync->load (std::memory_order_relaxed) > 0.5f;            // bouton SYNC : delay cale sur le tempo du DAW
     const bool locked = syncOn && bpm > 1.0;
     if (locked) quarter = (float) (60000.0 / bpm);
     hostBpm = (float) bpm; hostLocked = locked;
     if (quarter < 0 && tapOverride) quarter = tapQuarterMs;
     if (quarter > 0)
     {
-        const int div = juce::jlimit (0, 6, (int) p ("division")->load());
+        const int div = juce::jlimit (0, 6, (int) rDivision->load (std::memory_order_relaxed));
         float t = juce::jlimit (67.0f, 10000.0f, quarter * kDivMult[div]);
         if (mode == GLT) t *= 0.25f;
         ms = longMode ? t * 0.5f : t;     // la valeur tapee est le temps reel, Long compris
@@ -297,11 +349,11 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     EngineParams ep;
     ep.mode = mode; ep.level = level; ep.feedback = fb; ep.timeKnob = time; ep.delayMs = ms;
-    ep.longMode = longMode; ep.dryKill = p ("drykill")->load() > 0.5f; ep.mix = p ("mix")->load();
+    ep.longMode = longMode; ep.dryKill = rDryKill->load (std::memory_order_relaxed) > 0.5f; ep.mix = rMix->load (std::memory_order_relaxed);
     if (mode == LOOP) loopLevel = level;            // E.LEVEL en LOOP = volume de boucle, memorise
     ep.loopLevel = loopLevel;
-    ep.stereo = (int) p ("stereo")->load();
-    ep.effectOn = p ("on")->load() > 0.5f; ep.carryover = p ("carryover")->load() > 0.5f;
+    ep.stereo = (int) rStereo->load (std::memory_order_relaxed);
+    ep.effectOn = rOn->load (std::memory_order_relaxed) > 0.5f; ep.carryover = rCarryover->load (std::memory_order_relaxed) > 0.5f;
     ep.holdFx = fsHoldFx; ep.twist = twistP && mode != LOOP;
     engine.lastStereoWide = ep.stereo == STEREO_WIDE;
 
@@ -310,8 +362,9 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     if (buffer.getNumChannels() > 1) engine.process (L, R, L, R, n, ep);
     else
     {
-        juce::HeapBlock<float> tmp ((size_t) n); std::copy (L, L + n, tmp.get());
-        engine.process (L, tmp.get(), L, tmp.get(), n, ep);
+        if (monoTmp.size() < (size_t) n) monoTmp.resize ((size_t) n);   // rare : bloc plus grand qu'annonce
+        float* tmp = monoTmp.data(); std::copy (L, L + n, tmp);
+        engine.process (L, tmp, L, tmp, n, ep);
         for (int i = 0; i < n; ++i) L[i] = 0.5f * (L[i] + tmp[i]);
     }
     for (int c = numIn; c < numOut && c >= 2; ++c) buffer.clear (c, 0, n);

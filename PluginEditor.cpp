@@ -223,9 +223,25 @@ void PedalView::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)
     }
 }
 
+void PedalView::askRepaint (Rectangle<int> r)
+{
+    if (repaintAskedMs <= 0.0) repaintAskedMs = Time::getMillisecondCounterHiRes();
+    repaint (r);
+}
+
 void PedalView::timerCallback()
 {
-    if (onTimerTick) onTimerTick();   // anti-gel Windows : l'editeur verifie le moteur de rendu
+    if (onTimerTick) onTimerTick();   // anti-gel Windows : l'editeur verifie le moteur de rendu et refait ses caches
+
+    // chien de garde (anti-gel v2) : un redessin demande n'arrive pas -> l'editeur relance le moteur de rendu
+    const double nowMs = Time::getMillisecondCounterHiRes();
+    if (repaintAskedMs > 0.0 && isShowing() && nowMs - repaintAskedMs > 1500.0 && lastPaintMs < repaintAskedMs)
+    {
+        repaintAskedMs = 0.0;
+        if (onRepaintStuck) onRepaintStuck();
+        repaint();
+    }
+
     anim += 1.0f / 30.0f;
     // TAP maintenu : TWIST (et, en LOOP, maintien 2 s = effacer)
     if (pressed == TAPFS && ! twistSent)
@@ -249,7 +265,7 @@ void PedalView::timerCallback()
     // Les potards, le selecteur de mode, X2, SYNC on/off et les footswitchs redessinent deja
     // eux-memes (attachements de parametres, clics souris).
     auto changed = [] (float& drawn, float now) { if (std::abs (drawn - now) < 0.002f) return false; drawn = now; return true; };
-    auto zone = [this] (Rectangle<float> r) { repaint (r.getSmallestIntegerContainer().expanded (3)); };
+    auto zone = [this] (Rectangle<float> r) { askRepaint (r.getSmallestIntegerContainer().expanded (3)); };
 
     // ligne d'etat : texte et fondu
     const auto txt = statusLine();
@@ -417,6 +433,8 @@ String PedalView::statusLine() const
 
 void PedalView::paint (Graphics& g)
 {
+    lastPaintMs = Time::getMillisecondCounterHiRes();
+    repaintAskedMs = 0.0;
     g.drawImage (bg, Rectangle<float> (0, 0, imgW, imgH));
 
     // ligne d etat en haut de la plaque
@@ -500,7 +518,8 @@ EightEchoEditor::EightEchoEditor (EightEchoProcessor& p) : AudioProcessorEditor 
     pedal.onBackgroundRightClick = [this] (const MouseEvent&) { showMenu(); };
     // le timer de l'interface est celui de la pedale : a chaque tic on verifie le moteur de rendu,
     // au cas ou la fenetre a ete recreee par l'hote (changement d'ecran, d'echelle...)
-    pedal.onTimerTick = [this] { useSoftwareRenderer(); };
+    pedal.onTimerTick = [this] { tick(); };
+    pedal.onRepaintStuck = [this] { lastPeer = nullptr; useSoftwareRenderer(); repaint(); };
 
     // l'ordre compte : setResizable() d'abord (il cree le coin de redimensionnement),
     // puis notre contrainte stricte, pour que le coin ET l'hote l'utilisent
@@ -511,7 +530,9 @@ EightEchoEditor::EightEchoEditor (EightEchoProcessor& p) : AudioProcessorEditor 
     constrainer.setMinimumOnscreenAmounts (0x10000, 0x10000, 0x10000, 0x10000);
     setConstrainer (&constrainer);
     const float sc = jlimit (1.0f, maxScale, proc.uiScale.load());
+    setOpaque (true);                      // anti-gel : l'hote ne redessine jamais ce qui est derriere la fenetre
     setSize (roundToInt (baseW * sc), roundToInt (baseH * sc));
+    rebuildCaches();
 }
 
 void EightEchoEditor::setScale (float s)
@@ -524,10 +545,22 @@ void EightEchoEditor::setScale (float s)
 // Anti-gel de la fenetre (Windows) : JUCE 8 dessine par defaut avec Direct2D (carte graphique).
 // Avec certains pilotes (Intel notamment) la fenetre du plugin cesse de se rafraichir alors que
 // le DAW continue de tourner. Le moteur logiciel est stable partout et largement assez rapide ici.
+//
+// Anti-gel v2 (Studio Wiga) :
+//  1. moteur de rendu logiciel force sur Windows, applique a chaque nouvelle fenetre hote (peer)
+//     et reverifie toutes les secondes, jamais en boucle ;
+//  2. aucun calcul lourd dans paint() : le fond de la fenetre (degrade, motifs, ombre) est mis en cache
+//     par le timer seulement, apres stabilisation de la taille ou quand l'echelle d'affichage change
+//     (au plus toutes les 250 ms) ;
+//  3. chien de garde : si un redessin demande n'est pas arrive au bout de 1,5 s alors que la fenetre est
+//     visible, le moteur de rendu est reapplique et toute la fenetre est redessinee ;
+//  4. cote audio : aucun appel a l'hote depuis le thread audio (voir PluginProcessor).
 void EightEchoEditor::useSoftwareRenderer()
 {
+    auto* peer = getPeer();
+    if (peer != lastPeer) { lastPeer = peer; repaint(); }
    #if JUCE_WINDOWS
-    if (auto* peer = getPeer())
+    if (peer != nullptr)
     {
         int sw = peer->getAvailableRenderingEngines().indexOf ("Software Renderer");
         if (sw < 0) sw = 0;
@@ -542,23 +575,69 @@ void EightEchoEditor::parentHierarchyChanged()
     useSoftwareRenderer();
 }
 
+void EightEchoEditor::visibilityChanged()
+{
+    useSoftwareRenderer();
+    if (isShowing())
+        repaint();
+}
+
+float EightEchoEditor::physicalScale() const
+{
+    return jlimit (1.0f, 4.0f, (float) Component::getApproximateScaleFactorForComponent (this));
+}
+
+void EightEchoEditor::tick()
+{
+    const double now = Time::getMillisecondCounterHiRes();
+    // au cas ou la fenetre a ete recreee par l'hote (changement d'ecran, d'echelle...) : au plus 1 fois par seconde
+    if (getPeer() != lastPeer || now - lastRendererCheckMs > 1000.0) { lastRendererCheckMs = now; useSoftwareRenderer(); }
+
+    // caches : reconstruits ici seulement (jamais dans paint)
+    if (resizeSettle > 0 && --resizeSettle == 0)
+        rebuildCaches();
+    else if (resizeSettle == 0 && now - lastScaleCheckMs > 250.0)
+    {
+        lastScaleCheckMs = now;
+        const float sc = physicalScale();
+        if (std::abs (sc - cacheScale) > 0.01f)
+            rebuildCaches (sc);
+    }
+}
+
+void EightEchoEditor::rebuildCaches (float sc)
+{
+    if (sc <= 0.0f)
+        sc = cacheScale > 0.0f ? cacheScale : physicalScale();
+    const int w = getWidth(), h = getHeight();
+    if (w <= 0 || h <= 0)
+        return;
+    if (w == cacheW && h == cacheH && std::abs (sc - cacheScale) < 0.01f && bgCache.isValid())
+        return;
+
+    cacheW = w; cacheH = h; cacheScale = sc;
+    const int pw = roundToInt ((float) w * sc), ph = roundToInt ((float) h * sc);
+    Image img (Image::RGB, pw, ph, true);
+    {
+        Graphics cg (img);
+        cg.addTransform (AffineTransform::scale ((float) pw / (float) w, (float) ph / (float) h));
+        drawBackdrop (cg);
+    }
+    bgCache = img;
+    repaint();
+}
+
 void EightEchoEditor::resized()
 {
-    // filet de securite : si un hote impose malgre tout une taille plus petite, on revient a la taille par defaut
-    // tolerance de 2 px : avec la mise a l'echelle Windows (125 %, 150 %...) l'hote arrondit les tailles ;
-    // sans marge, les deux se renvoient la fenetre en boucle
-    if (getWidth() < baseW - 2 || getHeight() < baseH - 2)
-    {
-        juce::Component::SafePointer<EightEchoEditor> self (this);
-        juce::MessageManager::callAsync ([self] { if (self != nullptr) self->setSize (baseW, baseH); });
-        return;
-    }
+    // anti-gel : jamais de setSize ici (mise a l'echelle Windows 125 / 150 % : tolerance de quelques px) ;
+    // la contrainte stricte (StrictMinConstrainer) suffit a garder la taille minimale
     const float s = jmin ((float) getWidth() / (float) baseW, (float) getHeight() / (float) baseH);
     proc.uiScale = s;
     const auto a = pedalArea();
     const float ps = a.getHeight() / PedalView::imgH;
     pedal.setBounds (0, 0, (int) PedalView::imgW, (int) PedalView::imgH);
     pedal.setTransform (AffineTransform::scale (ps).translated (a.getX(), a.getY()).scaled (s));
+    resizeSettle = 4;      // le cache du fond sera refait quand la taille sera stable
 }
 
 Rectangle<float> EightEchoEditor::pedalArea() const
@@ -585,6 +664,17 @@ static void drawPedalMotif (Graphics& g, Point<float> c, float sc, float alpha)
 }
 
 void EightEchoEditor::paint (Graphics& g)
+{
+    g.fillAll (Colours::black);
+    // anti-gel : aucun dessin lourd ici, on dessine le cache existant (refait par le timer)
+    if (bgCache.isValid())
+    {
+        g.setImageResamplingQuality (Graphics::lowResamplingQuality);
+        g.drawImage (bgCache, getLocalBounds().toFloat());
+    }
+}
+
+void EightEchoEditor::drawBackdrop (Graphics& g) const
 {
     // fond noir, eclairage doux derriere la pedale, motifs d'anneaux de la pedale en transparence
     const float s = currentScale();
