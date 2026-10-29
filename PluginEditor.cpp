@@ -118,6 +118,21 @@ void PedalView::mouseMove (const MouseEvent& e)
     setMouseCursor (hot ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
 }
 
+// commande apprenable en MIDI sous la souris (memes zones que les clics)
+int PedalView::learnIndexAt (Point<float> p) const
+{
+    auto idx = [] (const char* id) { return EightEchoProcessor::learnIndexOf (id); };
+    if (p.getDistanceFrom (cBypass) < 52) return idx ("footswitch");
+    if (p.getDistanceFrom (cTap) < 52)    return idx ("tap");
+    if (p.getDistanceFrom (cX2) < 36)     return idx ("long");
+    if (p.getDistanceFrom (cSync) < 28)   return idx ("sync");
+    if (p.getDistanceFrom (cPrev) < 18)   return idx ("prev");
+    if (p.getDistanceFrom (cNext) < 18)   return idx ("next");
+    if (modeLabelAt (p) >= 0 && knobAt (p) < 0) return idx ("mode");
+    if (int k = knobAt (p); k >= 0)       return EightEchoProcessor::learnIndexOf (knobs[(size_t) k].id);
+    return -1;
+}
+
 void PedalView::mouseDown (const MouseEvent& e)
 {
     const auto p = e.position;
@@ -243,6 +258,12 @@ void PedalView::timerCallback()
     }
 
     anim += 1.0f / 30.0f;
+    // MIDI Learn termine (le processeur l'a note) : "<COMMANDE> = CC n" pendant 2 s
+    if (const int learned = proc.lastLearned.exchange (-1); learned >= 0)
+    {
+        learnedText = String (EightEchoProcessor::learnable (learned).name) + " = CC " + String (proc.ccNum[learned].load());
+        learnedAt = anim;
+    }
     // TAP maintenu : TWIST (et, en LOOP, maintien 2 s = effacer)
     if (pressed == TAPFS && ! twistSent)
     {
@@ -399,6 +420,7 @@ float PedalView::tempoAmount() const
 
 float PedalView::statusVisibility() const
 {
+    if (proc.learnTarget.load() >= 0) return 1.0f;                           // MIDI Learn : reste affiche
     const float age = anim - statusShownAt;
     return age < 1.8f ? jlimit (0.0f, 1.0f, age / 0.08f)                      // apparition rapide
                       : jlimit (0.0f, 1.0f, 1.0f - (age - 1.8f) / 0.6f);      // puis fondu
@@ -406,6 +428,11 @@ float PedalView::statusVisibility() const
 
 String PedalView::statusLine() const
 {
+    // MIDI Learn : attente d'un CC, puis confirmation 2 s
+    if (const int lt = proc.learnTarget.load(); lt >= 0)
+        return "MIDI LEARN: move a control for " + String (EightEchoProcessor::learnable (lt).name);
+    if (anim - learnedAt < 2.0f) return learnedText;
+
     auto& s = proc.apvts;
     const int mode = (int) s.getRawParameterValue ("mode")->load();
     auto pc = [&] (const char* id) { return String (roundToInt (s.getRawParameterValue (id)->load() * 100.0f)); };
@@ -515,7 +542,7 @@ void PedalView::paint (Graphics& g)
 EightEchoEditor::EightEchoEditor (EightEchoProcessor& p) : AudioProcessorEditor (&p), proc (p), pedal (p)
 {
     addAndMakeVisible (pedal);
-    pedal.onBackgroundRightClick = [this] (const MouseEvent&) { showMenu(); };
+    pedal.onBackgroundRightClick = [this] (const MouseEvent& e) { showMenu (pedal.learnIndexAt (e.position)); };
     // le timer de l'interface est celui de la pedale : a chaque tic on verifie le moteur de rendu,
     // au cas ou la fenetre a ete recreee par l'hote (changement d'ecran, d'echelle...)
     pedal.onTimerTick = [this] { tick(); };
@@ -707,7 +734,7 @@ void EightEchoEditor::mouseDown (const MouseEvent& e)
     if (e.mods.isPopupMenu()) showMenu();
 }
 
-void EightEchoEditor::showMenu()
+void EightEchoEditor::showMenu (int learnTarget)
 {
     auto& s = proc.apvts;
     auto val = [&s] (const char* id) { return s.getRawParameterValue (id)->load(); };
@@ -729,6 +756,22 @@ void EightEchoEditor::showMenu()
     PopupMenu save;
     for (int i = 0; i < EightEchoProcessor::kNumSlots; ++i) save.addItem (700 + i, "Memory " + String (i + 1));
 
+    // MIDI Learn : toutes les commandes de la facade
+    auto ccText = [this] (int i) { const int n = proc.ccNum[i].load(); return n >= 0 ? "CC " + String (n) : String (CharPointer_UTF8 ("\xe2\x80\x94")); };
+    auto ctlName = [] (int i) { return String (EightEchoProcessor::learnable (i).name); };
+    PopupMenu midi;
+    for (int i = 0; i < EightEchoProcessor::kNumLearn; ++i)
+        midi.addItem (800 + i, "Learn: " + ctlName (i) + " (" + ccText (i) + ")", true, proc.learnTarget.load() == i);
+    if (proc.learnTarget.load() >= 0) midi.addItem (898, "Cancel MIDI learn");
+    midi.addSeparator();
+    midi.addItem (899, "Reset MIDI to defaults");
+
+    if (learnTarget >= 0)      // clic droit sur une commande : son MIDI Learn en tete du menu
+    {
+        m.addItem (800 + learnTarget, "MIDI Learn: " + ctlName (learnTarget) + " (" + ccText (learnTarget) + ")");
+        m.addItem (850 + learnTarget, "Clear MIDI: " + ctlName (learnTarget));
+        m.addSeparator();
+    }
     m.addSubMenu ("Factory presets (load into current slot P" + String (proc.getCurrentSlot() + 1) + ")", presets);
     m.addSubMenu ("Save current settings to memory", save);
     m.addSeparator();
@@ -738,6 +781,7 @@ void EightEchoEditor::showMenu()
     m.addItem (602, "SYNC : delay locked to host tempo", true, val ("sync") > 0.5f);
     m.addSubMenu ("Expression pedal (EXP parameter)", exp);
     m.addSeparator();
+    m.addSubMenu ("MIDI", midi);
     m.addSubMenu ("Window size", size);
 
     m.showMenuAsync (PopupMenu::Options(), [this] (int r)
@@ -757,5 +801,13 @@ void EightEchoEditor::showMenu()
         else if (r >= 700 && r < 700 + EightEchoProcessor::kNumSlots) pedal.saveToSlot (r - 700);
         else if (r == 601) toggle ("carryover");
         else if (r == 602) toggle ("sync");
+        else if (r >= 800 && r < 800 + EightEchoProcessor::kNumLearn) proc.learnTarget.store (r - 800);
+        else if (r >= 850 && r < 850 + EightEchoProcessor::kNumLearn)
+        {
+            proc.ccNum[r - 850].store (-1);
+            if (proc.learnTarget.load() == r - 850) proc.learnTarget.store (-1);
+        }
+        else if (r == 898) proc.learnTarget.store (-1);
+        else if (r == 899) proc.resetMidiDefaults();
     });
 }

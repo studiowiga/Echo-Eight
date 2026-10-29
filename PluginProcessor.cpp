@@ -103,6 +103,7 @@ EightEchoProcessor::EightEchoProcessor()
     rStereo = p ("stereo"); rOn = p ("on"); rCarryover = p ("carryover");
     taps.reserve (8);
     for (int i = 0; i < numQueued; ++i) { pendingValue[i].store (0.0f); pendingSet[i].store (false); }
+    resetMidiDefaults();
     initSlots();
     startTimerHz (60);
 }
@@ -118,7 +119,7 @@ EightEchoProcessor::~EightEchoProcessor()
 // ---------------------------------------------------------------------------
 const char* EightEchoProcessor::queuedId (int i)
 {
-    static const char* ids[numQueued] = { "on" };
+    static const char* ids[numQueued] = { "on", "elevel", "mix", "feedback", "time", "exp", "mode", "long", "sync" };
     return ids[juce::jlimit (0, numQueued - 1, i)];
 }
 
@@ -147,6 +148,96 @@ void EightEchoProcessor::timerCallback()
         if (pendingSet[i].exchange (false, std::memory_order_acquire))
             if (auto* prm = apvts.getParameter (queuedId (i)))
                 prm->setValueNotifyingHost (prm->convertTo0to1 (pendingValue[i].load (std::memory_order_relaxed)));
+
+    // PREV / NEXT MEMORY recus en MIDI : rappel de la memoire ici (thread de messages)
+    if (const int step = pendingSlotStep.exchange (0); step != 0)
+        loadSlot (((currentSlot + step) % kNumSlots + kNumSlots) % kNumSlots);
+}
+
+// ---------------------------------------------------------------------------
+//  MIDI Learn : table des commandes apprenables (nom = serigraphie de la pedale)
+//  Potards a partir de CC 20, selecteur / inverseurs ensuite, footswitchs a partir de CC 80.
+// ---------------------------------------------------------------------------
+const EightEchoProcessor::Learnable& EightEchoProcessor::learnable (int i)
+{
+    static const Learnable t[kNumLearn] = {
+        { "elevel",     "E.LEVEL",     20, kContinuous },
+        { "mix",        "MIX",         21, kContinuous },
+        { "feedback",   "FEEDBACK",    22, kContinuous },
+        { "time",       "TIME",        23, kContinuous },
+        { "mode",       "MODE",        24, kSelector },
+        { "long",       "X2",          25, kToggle },
+        { "sync",       "SYNC",        26, kToggle },
+        { "exp",        "EXP",         27, kContinuous },     // pedale d'expression (menu Expression pedal)
+        { "footswitch", "BYPASS",      80, kFootswitch },     // tenu tant que CC >= 64 (comme le footswitch)
+        { "tap",        "TAP",         81, kFootswitch },     // tenu : TWIST (en LOOP : 2 s = effacer)
+        { "prev",       "PREV MEMORY", 82, kAction },         // bouton au-dessus de TAP
+        { "next",       "NEXT MEMORY", 83, kAction },         // bouton au-dessus de BYPASS
+    };
+    return t[juce::jlimit (0, kNumLearn - 1, i)];
+}
+
+int EightEchoProcessor::learnIndexOf (const juce::String& id)
+{
+    for (int i = 0; i < kNumLearn; ++i)
+        if (id == learnable (i).id) return i;
+    return -1;
+}
+
+void EightEchoProcessor::resetMidiDefaults()
+{
+    for (int i = 0; i < kNumLearn; ++i) ccNum[i].store (learnable (i).defaultCC);
+}
+
+// Thread audio : aucune allocation, aucun appel a l'hote. Les valeurs passent par la file (timer 60 Hz).
+void EightEchoProcessor::handleMidi (juce::MidiBuffer& midi)
+{
+    for (const auto meta : midi)
+    {
+        const auto msg = meta.getMessage();
+        if (! msg.isController()) continue;
+        const int cc = msg.getControllerNumber(), v = msg.getControllerValue();
+
+        // learn : le premier CC recu est affecte a la commande visee (et n'agit pas sur le son)
+        const int lt = learnTarget.load();
+        if (lt >= 0 && lt < kNumLearn)
+        {
+            if (cc >= 120) continue;                       // messages de mode de canal : ignores
+            for (int i = 0; i < kNumLearn; ++i)
+                if (i != lt && ccNum[i].load() == cc) ccNum[i].store (-1);   // deja pris : l'autre commande est liberee
+            ccNum[lt].store (cc);
+            ccPrevValue[lt] = v;
+            lastLearned.store (lt);
+            learnTarget.store (-1);
+            continue;
+        }
+
+        for (int i = 0; i < kNumLearn; ++i)
+        {
+            if (ccNum[i].load (std::memory_order_relaxed) != cc) continue;
+            const auto& d = learnable (i);
+            const bool high = v >= 64;
+            switch (d.type)
+            {
+                case kContinuous: setParamFromAudio (d.id, (float) v / 127.0f); break;          // plages 0..1
+                case kToggle:     setParamFromAudio (d.id, high ? 1.0f : 0.0f); break;
+                case kSelector:   setParamFromAudio (d.id, (float) juce::jmin (kNumModes - 1, v * kNumModes / 128)); break;
+                case kFootswitch:
+                    if (std::strcmp (d.id, "footswitch") == 0) { ccFsDown = high; ccFsHit = ccFsHit || high; }
+                    else
+                    {
+                        if (high && ! ccTapDown) ccTapPressSample = sampleClock + meta.samplePosition;
+                        ccTapDown = high; ccTapHit = ccTapHit || high;
+                    }
+                    break;
+                case kAction:
+                    if (high && ccPrevValue[i] < 64) pendingSlotStep.fetch_add (std::strcmp (d.id, "prev") == 0 ? -1 : 1);
+                    break;
+                default: break;
+            }
+            ccPrevValue[i] = v;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -294,7 +385,7 @@ void EightEchoProcessor::handleFootswitch (bool pressed, int mode, int blockLen)
     fsPrev = pressed;
 }
 
-void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
     const int n = buffer.getNumSamples();
@@ -304,10 +395,17 @@ void EightEchoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     // mono -> stereo
     if (numIn == 1 && buffer.getNumChannels() > 1) buffer.copyFrom (1, 0, buffer, 0, 0, n);
 
+    handleMidi (midi);
+
     const int mode = (int) rMode->load (std::memory_order_relaxed);
-    const bool fs = rFootswitch->load (std::memory_order_relaxed) > 0.5f;
-    const bool tapP = rTap->load (std::memory_order_relaxed) > 0.5f;
-    const bool twistP = rTwist->load (std::memory_order_relaxed) > 0.5f;
+    // footswitchs : parametre (souris / DAW) OU CC appris tenu (un appui bref dans le bloc compte aussi)
+    const bool fs = rFootswitch->load (std::memory_order_relaxed) > 0.5f || ccFsDown || ccFsHit;
+    const bool tapP = rTap->load (std::memory_order_relaxed) > 0.5f || ccTapDown || ccTapHit;
+    // TAP tenu par CC : TWIST apres 0,45 s (en LOOP : effacer apres 2 s), comme a la souris
+    const double ccTapHeld = ccTapDown ? (double) (sampleClock - ccTapPressSample) / sr : 0.0;
+    const bool ccTwist = ccTapDown && ccTapHeld > (mode == LOOP ? 2.0 : 0.45);
+    const bool twistP = rTwist->load (std::memory_order_relaxed) > 0.5f || ccTwist;
+    ccFsHit = false; ccTapHit = false;
 
     handleFootswitch (fs, mode, n);
     if (mode == LOOP) tapModeActive = false;
@@ -449,6 +547,8 @@ void EightEchoProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty ("tapOn", tapOverride, nullptr);
     state.setProperty ("program", currentProgram, nullptr);
     state.setProperty ("slot", currentSlot, nullptr);
+    for (int i = 0; i < kNumLearn; ++i)
+        state.setProperty (juce::String ("midiCC_") + learnable (i).id, ccNum[i].load(), nullptr);
     state.removeChild (state.getChildWithName ("SLOTS"), nullptr);
     juce::ValueTree sl ("SLOTS");
     for (auto& t : slots) sl.appendChild (t.createCopy(), nullptr);
@@ -467,6 +567,9 @@ void EightEchoProcessor::setStateInformation (const void* data, int sizeInBytes)
             tapOverride = (bool) vt.getProperty ("tapOn", false);
             currentProgram = (int) vt.getProperty ("program", 0);
             currentSlot = juce::jlimit (0, kNumSlots - 1, (int) vt.getProperty ("slot", 0));
+            // assignations MIDI (ancien projet sans ces proprietes : numeros par defaut)
+            for (int i = 0; i < kNumLearn; ++i)
+                ccNum[i].store ((int) vt.getProperty (juce::String ("midiCC_") + learnable (i).id, learnable (i).defaultCC));
             auto sl = vt.getChildWithName ("SLOTS");
             if (sl.isValid())
             {

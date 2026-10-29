@@ -72,6 +72,17 @@ public:
     bool slotMatchesCurrent (int i) const;
     static const juce::StringArray& slotParamIds();
 
+    // ---- MIDI Learn : toutes les commandes de la facade (clic droit sur une commande ou menu MIDI) ----
+    enum LearnType { kContinuous = 0, kToggle, kSelector, kFootswitch, kAction };
+    struct Learnable { const char* id; const char* name; int defaultCC; int type; };
+    static constexpr int kNumLearn = 12;
+    static const Learnable& learnable (int i);
+    static int learnIndexOf (const juce::String& id);          // -1 si la commande n'est pas apprenable
+    std::atomic<int> ccNum[kNumLearn];                          // numero de CC de chaque commande (-1 = non assigne)
+    std::atomic<int> learnTarget { -1 };                        // commande en attente d'un CC (-1 = pas de learn)
+    std::atomic<int> lastLearned { -1 };                        // pour l'affichage
+    void resetMidiDefaults();
+
 private:
     wiga::DelayEngine engine;
     double sr = 48000.0;
@@ -94,6 +105,13 @@ private:
     void handleFootswitch (bool pressed, int mode, int blockLen);
     void registerTap();
 
+    // MIDI (thread audio) : footswitchs BYPASS / TAP tenus par un CC, front montant des actions
+    void handleMidi (juce::MidiBuffer& midi);
+    bool ccFsDown = false, ccFsHit = false, ccTapDown = false, ccTapHit = false;
+    int64_t ccTapPressSample = 0;
+    int ccPrevValue[kNumLearn] {};
+    std::atomic<int> pendingSlotStep { 0 };     // PREV / NEXT MEMORY par CC, applique par le timer
+
     juce::AudioParameterBool* pOn = nullptr;
     std::atomic<float>* p(const char* id) { return apvts.getRawParameterValue (id); }
 
@@ -111,7 +129,7 @@ private:
     void timerCallback() override;
     void setParamFromAudio (const char* id, float plain);
     float queuedOrCurrent (const char* id, std::atomic<float>* current) const;
-    static constexpr int numQueued = 1;
+    static constexpr int numQueued = 9;
     static const char* queuedId (int i);
     std::atomic<float> pendingValue[numQueued];
     std::atomic<bool>  pendingSet[numQueued];

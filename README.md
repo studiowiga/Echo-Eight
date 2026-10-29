@@ -127,3 +127,7 @@ Looper : Looper
 
 ## Version 1.6.0
 - v1.6.0 : anti-gel v2 (JUCE 8.0.15, caches refaits par le timer, chien de garde, aucun appel à l'hôte depuis le thread audio)
+
+## Version 1.7.0
+- v1.7.0 : MIDI Learn sur toutes les commandes (clic droit sur une commande ou menu MIDI), assignations sauvegardées avec le projet
+- CC par défaut : E.LEVEL 20, MIX 21, FEEDBACK 22, TIME 23, MODE 24, X2 25, SYNC 26, EXP 27, BYPASS 80, TAP 81, PREV MEMORY 82, NEXT MEMORY 83.

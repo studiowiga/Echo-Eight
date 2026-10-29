@@ -26,6 +26,7 @@ public:
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     void mouseMove (const juce::MouseEvent&) override;
+    int  learnIndexAt (juce::Point<float>) const;   // commande apprenable sous la souris (-1 = aucune)
 
     std::function<void (const juce::MouseEvent&)> onBackgroundRightClick;
     std::function<void()> onTimerTick;      // appele a chaque tic du timer de l'interface (anti-gel Windows)
@@ -55,6 +56,8 @@ private:
     float anim = 0;
     // ligne d'etat : n'apparait que quand une information change, puis s'efface
     juce::String lastStatus; float statusShownAt = -100.0f;
+    // MIDI Learn : "<COMMANDE> = CC n" affiche 2 s apres un apprentissage
+    juce::String learnedText; float learnedAt = -100.0f;
 
     // dernier etat reellement dessine : on ne redessine une zone que si elle a change
     std::array<float, 7> drawnLed { -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f };
@@ -143,7 +146,7 @@ private:
     void rebuildCaches (float scale = 0.0f);
     float physicalScale() const;
     void drawBackdrop (juce::Graphics&) const;     // fond, motifs et ombre (dessines dans le cache)
-    void showMenu();
+    void showMenu (int learnTarget = -1);          // learnTarget >= 0 : clic droit sur une commande
     void setScale (float s);
     juce::Rectangle<float> pedalArea() const;      // emplacement de la pedale (coordonnees taille par defaut)
     float currentScale() const { return juce::jmax (1.0f, (float) getWidth() / (float) baseW); }
