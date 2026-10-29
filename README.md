@@ -136,3 +136,6 @@ Looper : Looper
 - CC par défaut : E.LEVEL 20, MIX 21, FEEDBACK 22, TIME 23, MODE 24, X2 25, SYNC 26, EXP 27, BYPASS 80, TAP 81, PREV MEMORY 82, NEXT MEMORY 83.
 
 - v1.7.2 : menu de taille de fenêtre : « 60 % (default) », 75 %, 100 % (plus de taille en pixels)
+
+## Notice
+- `docs/EightEcho_Manual_EN-FR_v1.7.2.pdf` (anglais puis français). Générateur : `python3 tools/manual.py <sortie.pdf>` (textes dans `tools/manual_text.py`, illustrations dans `tools/manual/` ; LED des mémoires et SYNC recomposées depuis `leds_on.png` / `sync_on.png`).
